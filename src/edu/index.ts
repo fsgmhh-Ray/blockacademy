@@ -1,10 +1,11 @@
 /** 知识库统一索引与检索 */
 import { PHYSICAL_LIFE } from './knowledgePhysical';
 import { EARTH_TECH } from './knowledgeEarth';
+import { MATH_NODES } from './knowledgeMath';
 import { scoreNode, tokenize, type KnowledgeNode, type Domain } from './knowledgeTypes';
 
-export const ALL_KNOWLEDGE: KnowledgeNode[] = [...PHYSICAL_LIFE, ...EARTH_TECH];
-export const DOMAINS: Domain[] = ['Physical Science', 'Life Science', 'Earth & Space', 'Technology & Engineering'];
+export const ALL_KNOWLEDGE: KnowledgeNode[] = [...PHYSICAL_LIFE, ...EARTH_TECH, ...MATH_NODES];
+export const DOMAINS: Domain[] = ['Mathematics', 'Physical Science', 'Life Science', 'Earth & Space', 'Technology & Engineering'];
 
 const byId = new Map(ALL_KNOWLEDGE.map((n) => [n.id, n]));
 

@@ -43,6 +43,8 @@ const BLOCK_ICON: Record<string, string> = {
   crafting_table: '🪚', furnace: '🔥', torch: '🕯️', glowstone: '🔆', bookshelf: '📚',
   cactus: '🌵', mushroom: '🍄', star: '⭐', cloud: '☁️', portal: '🌀', board: '📋',
   bedrock: '🧱', carrot: '🥕',
+  copper_ore: '🟠', limestone: '⬜', rust_block: '🟫', mirror: '🪞',
+  lens: '🔍', concrete: '⬛', magnet: '🧲', gas: '🫧',
 };
 
 const BLOCK_CN: Record<string, string> = {
@@ -58,6 +60,8 @@ const BLOCK_CN: Record<string, string> = {
   furnace: '熔炉', torch: '火把', glowstone: '萤石', bookshelf: '书架', cactus: '仙人掌',
   mushroom: '蘑菇', star: '星星块', cloud: '云', portal: '传送石', board: '知识板',
   bedrock: '基岩', carrot: '胡萝卜',
+  copper_ore: '铜矿石', limestone: '石灰岩', rust_block: '铁锈块', mirror: '平面镜',
+  lens: '凸透镜', concrete: '混凝土', magnet: '磁铁', gas: '二氧化碳气泡',
 };
 
 // ── 每个方块都自动成为一个可放置物品
@@ -86,6 +90,24 @@ def({ key: 'milk', name: 'Milk', cn: '牛奶', icon: '🥛', kind: 'resource', d
 def({ key: 'flour', name: 'Flour', cn: '面粉', icon: '🌾', kind: 'resource', desc: '小麦磨的面粉' });
 def({ key: 'bean', name: 'Magic Bean', cn: '魔法豆', icon: '🫘', kind: 'food', heal: 1, desc: '吃了会……噗！' });
 
+// ───────── 化学实验材料（真实反应原理，见合成表） ─────────
+def({ key: 'salt', name: 'Salt', cn: '盐', icon: '🧂', kind: 'resource', desc: '海水晒出来的盐——溶在水里就看不见了（溶解）' });
+def({ key: 'sugar', name: 'Sugar', cn: '糖', icon: '🍬', kind: 'resource', desc: '甘蔗/甜菜里的糖，加热会变成焦糖（化学变化）' });
+def({ key: 'baking_soda', name: 'Baking Soda', cn: '小苏打', icon: '🧴', kind: 'resource', desc: '碳酸氢钠，遇上酸就会大量冒泡（酸碱中和）' });
+def({ key: 'vinegar', name: 'Vinegar', cn: '醋', icon: '🫗', kind: 'resource', desc: '含醋酸的酸——和小苏打是经典搭档' });
+def({ key: 'co2', name: 'Carbon Dioxide', cn: '二氧化碳', icon: '🫧', kind: 'resource', desc: '无色气体，比空气重，能浇灭火焰（隔绝氧气）' });
+def({ key: 'saltwater', name: 'Salt Water', cn: '盐水', icon: '🌊', kind: 'resource', desc: '盐溶解在水里形成的溶液，晒一晒盐会重新结晶出来' });
+def({ key: 'sugar_water', name: 'Sugar Water', cn: '糖水', icon: '🥤', kind: 'food', heal: 2, desc: '糖溶解在水里——喝一口，甜到心里' });
+def({ key: 'rust', name: 'Rust', cn: '铁锈', icon: '🟤', kind: 'resource', desc: '铁和氧气、水一起发生的缓慢氧化（化学变化，回不去）' });
+def({ key: 'quicklime', name: 'Quicklime', cn: '生石灰', icon: '⚪', kind: 'resource', desc: '石灰石高温煅烧的产物（CaCO₃ → CaO + CO₂），遇水会放热' });
+def({ key: 'slaked_lime', name: 'Slaked Lime', cn: '熟石灰', icon: '🥛', kind: 'resource', desc: '生石灰加水反应放出大量热，能刷墙（氢氧化钙）' });
+def({ key: 'hydrogen', name: 'Hydrogen', cn: '氢气', icon: '🎈', kind: 'resource', desc: '最轻的气体，电解水在负极得到它——遇火会"爆"的一声（爆鸣气实验）' });
+def({ key: 'oxygen', name: 'Oxygen', cn: '氧气', icon: '🌬️', kind: 'resource', desc: '电解水在正极得到它，支持燃烧——带火星的木条会复燃' });
+def({ key: 'copper_ingot', name: 'Copper Ingot', cn: '铜锭', icon: '🟠', kind: 'resource', desc: '熔炼铜矿石得到——导电性仅次于银，电线都用它' });
+def({ key: 'battery', name: 'Battery', cn: '电池', icon: '🔋', kind: 'resource', desc: '把化学能变成电能的装置——电解水就靠它供电' });
+def({ key: 'circuit', name: 'Circuit Board', cn: '电路板', icon: '🔌', kind: 'resource', desc: '铜箔走在绝缘板上，电流在铜里流动（导体/绝缘体）' });
+def({ key: 'concrete_mix', name: 'Concrete Mix', cn: '水泥砂浆', icon: '🪣', kind: 'resource', desc: '沙子 + 生石灰 + 水，真正的建筑胶凝材料' });
+
 // ───────── 食物 ─────────
 def({ key: 'bread', name: 'Bread', cn: '面包', icon: '🍞', kind: 'food', heal: 5, desc: '香喷喷的面包' });
 def({ key: 'apple', name: 'Apple', cn: '苹果', icon: '🍎', kind: 'food', heal: 4, desc: '从树上摘的' });
@@ -99,6 +121,22 @@ if (carrotItem) {
 }
 const wheatItem = BY_KEY.get('wheat');
 if (wheatItem) wheatItem.desc = '小麦，磨成面粉就能烤面包';
+
+// ───────── 化学 / 物理新方块的说明 ─────────
+const BLOCK_DESC: Record<string, string> = {
+  copper_ore: '铜矿石，熔炼出铜锭——电线和电路板都靠它导电',
+  limestone: '石灰岩，主要成分是碳酸钙，高温煅烧变生石灰',
+  rust_block: '铁锈块——铁氧化后的产物，放在铁块旁边会慢慢"传染"',
+  mirror: '平面镜，光的镜面反射：入射角 = 反射角',
+  lens: '凸透镜，把平行的阳光聚到一个焦点上（焦点处能点火）',
+  concrete: '混凝土，砂浆固化后比石头还结实——现代建筑之王',
+  magnet: '磁铁，能吸住铁制品，两端磁性最强（N/S 极）',
+  gas: '二氧化碳气泡，比空气重，会"坐"在地面上，能隔绝氧气灭火',
+};
+for (const [k, d] of Object.entries(BLOCK_DESC)) {
+  const it = BY_KEY.get(k);
+  if (it) it.desc = d;
+}
 
 // ───────── 工具与武器（程序化生成 4 档 × 4 种） ─────────
 const MATS = [

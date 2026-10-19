@@ -121,6 +121,16 @@ export const Blocks = {
   bookshelf: def({ key: 'bookshelf', name: 'Bookshelf', tiles: 'bookshelf', color: 0xa97c4a }),
   bedrock: def({ key: 'bedrock', name: 'Bedrock', tiles: 'bedrock', color: 0x333338 }),
   carrot: def({ key: 'carrot', name: 'Carrot', tiles: 'carrot', solid: false, transparent: true, color: 0xe88c3a }),
+
+  // ───────── 化学 / 物理（实验材料与器件） ─────────
+  copperOre: def({ key: 'copper_ore', name: 'Copper Ore', tiles: 'copper_ore', color: 0x6a9a7a }),
+  limestone: def({ key: 'limestone', name: 'Limestone', tiles: 'limestone', color: 0xd8d4c4 }),
+  rustBlock: def({ key: 'rust_block', name: 'Rusted Iron Block', tiles: 'rust_block', color: 0x9a5a30 }),
+  mirror: def({ key: 'mirror', name: 'Mirror', tiles: 'mirror', color: 0xc8ccd4 }),
+  lens: def({ key: 'lens', name: 'Magnifying Lens', tiles: 'lens', transparent: true, light: 0.15, color: 0xbfe8ff }),
+  concrete: def({ key: 'concrete', name: 'Concrete', tiles: 'concrete', color: 0xa8a8a0 }),
+  magnet: def({ key: 'magnet', name: 'Magnet', tiles: 'magnet', color: 0xb8bcc4 }),
+  gas: def({ key: 'gas', name: 'Carbon Dioxide Bubble', tiles: 'gas', solid: false, transparent: true, liquid: false, color: 0xf2fbff }),
 };
 
 export const BLOCK_LIST = defs;

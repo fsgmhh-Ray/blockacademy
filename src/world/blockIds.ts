@@ -56,6 +56,14 @@ export const blocks = {
   bookshelf: blockId('bookshelf'),
   bedrock: blockId('bedrock'),
   carrot: blockId('carrot'),
+  copperOre: blockId('copper_ore'),
+  limestone: blockId('limestone'),
+  rustBlock: blockId('rust_block'),
+  mirror: blockId('mirror'),
+  lens: blockId('lens'),
+  concrete: blockId('concrete'),
+  magnet: blockId('magnet'),
+  gas: blockId('gas'),
 };
 
 export const HOTBAR: { id: number; name: string }[] = [
@@ -153,5 +161,17 @@ export const BLOCK_NAMES: Record<string, number> = {
   bookshelf: blocks.bookshelf,
   bedrock: blocks.bedrock,
   carrot: blocks.carrot,
+  copperore: blocks.copperOre,
+  limestone: blocks.limestone,
+  rustblock: blocks.rustBlock,
+  rustediron: blocks.rustBlock,
+  mirror: blocks.mirror,
+  lens: blocks.lens,
+  magnifyinglens: blocks.lens,
+  concrete: blocks.concrete,
+  magnet: blocks.magnet,
+  gas: blocks.gas,
+  carbondioxide: blocks.gas,
+  co2: blocks.gas,
 };
 

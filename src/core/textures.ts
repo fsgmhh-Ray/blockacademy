@@ -1,17 +1,20 @@
 /**
  * 程序化贴图图集：不依赖任何外部图片资源，离线可玩。
- * atlas 为 8x8 网格，每格 16x16 像素 -> 128x128 纹理。
+ * atlas 为 12x12 网格，每格 16x16 像素 -> 192x192 纹理。
+ * （原 8x8=64 槽已用满 59，化学/物理/数学新方块需要更多槽位）
  */
 import * as THREE from 'three';
 
 export const TILE = 16;
-export const GRID = 8;
+export const GRID = 12;
 const SIZE = TILE * GRID;
 
 type Painter = (px: (x: number, y: number, rgb: number, a?: number) => void, rnd: () => number) => void;
 
 const hex = (h: number) => [h & 255, (h >> 8) & 255, (h >> 16) & 255] as const;
 const pack = (r: number, g: number, b: number) => (255 << 24) | (b << 16) | (g << 8) | r;
+/** 单参数十六进制颜色 → pack */
+const packHex = (h: number) => pack(h & 255, (h >> 8) & 255, (h >> 16) & 255);
 
 function shade(rgb: number, k: number): number {
   const r = Math.min(255, Math.max(0, (rgb & 255) * k)) | 0;
@@ -110,7 +113,7 @@ const TILES: Record<string, Painter> = {
   ),
   wood_top: combine(
     base(0xa9743f, 0.1),
-    overlay((x, y) => {
+    overlay((x, y, _rnd) => {
       const d = Math.hypot(x - 7.5, y - 7.5);
       if (Math.floor(d) % 2 === 0 && d < 8) return pack(0x8a, 0x5c, 0x31);
       return null;
@@ -143,7 +146,7 @@ const TILES: Record<string, Painter> = {
   ),
   brick: combine(
     base(0xa04e3e, 0.08),
-    overlay((x, y) => {
+    overlay((x, y, _rnd) => {
       const row = Math.floor(y / 4);
       const off = row % 2 === 0 ? 0 : 4;
       if (y % 4 === 3) return pack(0xc8, 0xb8, 0xa8);
@@ -152,7 +155,7 @@ const TILES: Record<string, Painter> = {
     }),
   ),
   glass: combine(
-    overlay((x, y) => {
+    overlay((x, y, _rnd) => {
       if (x === 0 || y === 0 || x === TILE - 1 || y === TILE - 1) return pack(0xd8, 0xf2, 0xff);
       if ((x + y) % 9 === 0) return pack(0xcc, 0xec, 0xff);
       return null;
@@ -240,7 +243,7 @@ const TILES: Record<string, Painter> = {
   ),
   cactus: combine(
     base(0x3f8f4f, 0.1),
-    overlay((x, y) => {
+    overlay((x, y, _rnd) => {
       if (x === 0 || x === TILE - 1 || y === 0 || y === TILE - 1) return pack(0x2f, 0x72, 0x3e);
       if ((x + y) % 7 === 0) return pack(0xd8, 0xe8, 0xc8);
       return null;
@@ -267,7 +270,7 @@ const TILES: Record<string, Painter> = {
   ),
   board: combine(
     base(0x6b4a2f, 0.1),
-    overlay((x, y) => {
+    overlay((x, y, _rnd) => {
       if (x < 2 || y < 2 || x > 13 || y > 13) return pack(0x8b, 0x5f, 0x36);
       return pack(0x33, 0x2a, 0x22);
     }),
@@ -276,7 +279,7 @@ const TILES: Record<string, Painter> = {
   // ───────── 新增：花草 / 村庄 / 设施 ─────────
   flower_blue: combine(
     base(0x6aa84f, 0.14),
-    overlay((x, y) => {
+    overlay((x, y, _rnd) => {
       const d = Math.hypot(x - 8, y - 9);
       if (d < 2.6) return pack(0x64, 0x8e, 0xf0);
       if (Math.abs(x - 8) < 1 && y > 9 && y < 14) return pack(0x3f, 0x7d, 0x35);
@@ -286,7 +289,7 @@ const TILES: Record<string, Painter> = {
   ),
   flower_pink: combine(
     base(0x6aa84f, 0.14),
-    overlay((x, y) => {
+    overlay((x, y, _rnd) => {
       const d = Math.hypot(x - 8, y - 9);
       if (d < 2.6) return pack(0xf2, 0x8f, 0xc0);
       if (Math.abs(x - 8) < 1 && y > 9 && y < 14) return pack(0x3f, 0x7d, 0x35);
@@ -296,7 +299,7 @@ const TILES: Record<string, Painter> = {
   ),
   flower_white: combine(
     base(0x6aa84f, 0.14),
-    overlay((x, y) => {
+    overlay((x, y, _rnd) => {
       const d = Math.hypot(x - 8, y - 10);
       if (d < 2.2) return pack(0xf6, 0xf6, 0xf2);
       if (Math.abs(x - 8) < 1 && y > 10 && y < 14) return pack(0x3f, 0x7d, 0x35);
@@ -323,7 +326,7 @@ const TILES: Record<string, Painter> = {
   ),
   crafting_table_side: combine(
     base(0xa97c4a, 0.08),
-    overlay((x, y) => {
+    overlay((x, y, _rnd) => {
       if (y < 4) return pack(0x7d, 0x56, 0x30);
       if (y === 4) return pack(0x5f, 0x40, 0x22);
       return null;
@@ -331,7 +334,7 @@ const TILES: Record<string, Painter> = {
   ),
   furnace_front: combine(
     base(0x8a8a8a, 0.1),
-    overlay((x, y) => {
+    overlay((x, y, _rnd) => {
       if (x > 4 && x < 12 && y > 7 && y < 13) return pack(0x2a, 0x24, 0x22);
       if (x > 5 && x < 11 && y > 9 && y < 12) return pack(0xff, 0x9c, 0x3c);
       return null;
@@ -340,7 +343,7 @@ const TILES: Record<string, Painter> = {
   furnace_side: base(0x7c7c7c, 0.12),
   torch: combine(
     base(0x8b5a2b, 0.1),
-    overlay((x, y) => {
+    overlay((x, y, _rnd) => {
       if (y > 10) return pack(0x6b, 0x42, 0x20);
       if (y > 2 && y < 9 && Math.abs(x - 8) < 2) return pack(0xff, 0xd2, 0x6a);
       return null;
@@ -370,7 +373,88 @@ const TILES: Record<string, Painter> = {
       return null;
     }),
   ),
+
+  // ───────── 化学 / 物理（实验材料与器件） ─────────
+  // 铜矿石：石底上撒铜绿/铜橙斑点
+  copper_ore: combine(
+    base(0x8a8a8a, 0.14),
+    overlay((x, y, rnd) => {
+      if (rnd() < 0.16) return pack(0x4f, 0x9a, 0x6a); // 铜绿（碱式碳酸铜）
+      if (rnd() < 0.14) return pack(0xc8, 0x7a, 0x3a); // 金属铜
+      if (rnd() < 0.1) return pack(0x6a, 0x6a, 0x6a);
+      return null;
+    }),
+  ),
+  // 石灰岩：浅灰白 + 水平层理纹
+  limestone: combine(
+    base(0xd8d4c4, 0.05),
+    overlay((x, y, _rnd) => {
+      const band = Math.floor(y / 4);
+      if (band % 2 === 1 && rndBand(x, y)) return packHex(0xb8b2a0);
+      if (y % 4 === 0) return packHex(0xc4bca8);
+      return null;
+    }),
+  ),
+  // 铁锈块：锈红 + 剥落斑块
+  rust_block: combine(
+    base(0x9a5a30, 0.16),
+    overlay((x, y, rnd) => {
+      if (rnd() < 0.22) return packHex(0x7a4020);
+      if (rnd() < 0.18) return packHex(0xb87a4a);
+      if (rnd() < 0.1) return packHex(0x5a2c14);
+      return null;
+    }),
+  ),
+  // 平面镜：银灰底 + 一道斜向高光
+  mirror: combine(
+    base(0xc8ccd4, 0.04),
+    overlay((x, y, _rnd) => {
+      const d = Math.abs(x - (16 - y)) ;
+      if (d < 2) return packHex(0xf2f6ff);
+      if (x === 1 || y === 1 || x === 14 || y === 14) return packHex(0x8a8e96);
+      return null;
+    }),
+  ),
+  // 凸透镜：淡蓝玻璃 + 中央凸起亮斑
+  lens: combine(
+    base(0xbfe8ff, 0.06),
+    overlay((x, y, _rnd) => {
+      const d = Math.hypot(x - 7.5, y - 7.5);
+      if (d < 3.5) return packHex(0xe8f8ff);
+      if (d < 6.5) return packHex(0xd0eefc);
+      if (x === 0 || y === 0 || x === 15 || y === 15) return packHex(0x8ab8d8);
+      return null;
+    }),
+  ),
+  // 混凝土：素水泥灰 + 细孔
+  concrete: combine(
+    base(0xa8a8a0, 0.07),
+    overlay((x, y, rnd) => (rnd() < 0.12 ? packHex(0x90908a) : null)),
+  ),
+  // 磁铁：两端红蓝极 + 银白中柱
+  magnet: combine(
+    base(0xb8bcc4, 0.04),
+    overlay((x) => {
+      if (x < 5) return packHex(0xc94a4a);
+      if (x > 10) return packHex(0x4a72c9);
+      return packHex(0xd8dce4);
+    }),
+  ),
+  // 二氧化碳气泡：半透明白泡（透明渲染）
+  gas: combine(
+    overlay((x, y, rnd) => {
+      const d = Math.hypot(x - 7.5, y - 7.5);
+      if (d < 5 && rnd() < 0.8) return packHex(0xf2fbff);
+      return null;
+    }),
+  ),
 };
+
+/** 石灰岩层理用的确定性伪随机（同一 tile 内自洽） */
+function rndBand(x: number, y: number): boolean {
+  const s = Math.sin(x * 12.9898 + y * 78.233) * 43758.5453;
+  return s - Math.floor(s) < 0.45;
+}
 
 /** tile key -> atlas 格位索引 */
 const index = new Map<string, number>();

@@ -1,6 +1,6 @@
 /** Knowledge type definitions + index helpers (four domains of elementary science) */
 
-export type Domain = 'Physical Science' | 'Life Science' | 'Earth & Space' | 'Technology & Engineering';
+export type Domain = 'Mathematics' | 'Physical Science' | 'Life Science' | 'Earth & Space' | 'Technology & Engineering';
 
 export interface KnowledgeNode {
   id: string;

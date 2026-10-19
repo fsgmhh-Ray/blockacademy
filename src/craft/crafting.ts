@@ -46,6 +46,38 @@ shapeless('cake', 1, 'table', ['milk', 'milk', 'milk', 'wheat', 'wheat', 'egg'])
 shaped('metal', 1, 'table', ['III', 'III', 'III'], { I: 'iron_ingot' });
 shapeless('iron_ingot', 9, 'table', ['metal']);
 
+// ───────── 化学实验台（工作台 = 实验台）：真实反应原理 ─────────
+// 溶解：盐/糖放进水里，颗粒变小均匀散开——物理变化，还能变回来
+shapeless('saltwater', 1, 'inventory', ['salt', 'water']);
+shapeless('sugar_water', 1, 'inventory', ['sugar', 'water']);
+// 酸碱中和：小苏打（碳酸氢钠）+ 醋（醋酸）→ 大量二氧化碳气泡
+shapeless('co2', 2, 'table', ['baking_soda', 'vinegar']);
+// 氧化生锈：铁 + 水 + 氧气，缓慢的化学变化（回不去）
+shapeless('rust', 1, 'table', ['iron_ingot', 'water', 'oxygen']);
+// 石灰的家族：石灰石高温煅烧 → 生石灰（熔炉）；生石灰遇水放热 → 熟石灰
+shapeless('slaked_lime', 1, 'table', ['quicklime', 'water']);
+// 水泥砂浆：沙子 + 生石灰 + 水——真正的建筑胶凝材料
+shapeless('concrete_mix', 1, 'table', ['sand', 'quicklime', 'water']);
+// 砂浆固化变硬：胶凝材料把沙粒粘成整体（硬化是化学变化）
+shapeless('concrete', 4, 'table', ['concrete_mix']);
+// 电池：把化学能变成电能（金属外壳 + 水晶能量芯 + 煤电极）
+shapeless('battery', 1, 'table', ['metal', 'crystal_shard', 'coal']);
+// 电解水：电池在上"负极朝下"→ 氢气翻倍（体积 2:1）；电池在下"正极朝上"→ 氧气一份
+shaped('hydrogen', 2, 'table', ['B', 'W', 'W'], { B: 'battery', W: 'water' });
+shaped('oxygen', 1, 'table', ['W', 'W', 'B'], { B: 'battery', W: 'water' });
+// 爆鸣气实验：2 份氢气 + 1 份氧气，点燃（煤）→ 重新变成水，一声"爆"
+shapeless('water', 1, 'table', ['hydrogen', 'hydrogen', 'oxygen', 'coal']);
+
+// ───────── 物理器件 ─────────
+// 平面镜：玻璃 + 银白色金属（镀银）——光的镜面反射
+shaped('mirror', 2, 'table', ['GGG', 'MMM'], { G: 'glass', M: 'metal' });
+// 凸透镜：中间厚边缘薄的玻璃——把平行的阳光聚到焦点
+shaped('lens', 2, 'table', ['GGG', 'G.G', 'GGG'], { G: 'glass' });
+// 磁铁：铁磁体 + 水晶充磁——能吸住铁制物品
+shapeless('magnet', 1, 'table', ['iron_ingot', 'iron_ingot', 'iron_ingot', 'crystal_shard']);
+// 电路板：铜箔走线（铜是优良导体）+ 玻璃纤板（绝缘体）
+shaped('circuit', 1, 'table', ['CCC', 'CGC', 'CCC'], { C: 'copper_ingot', G: 'glass' });
+
 // ───────── 工具武器（需要工作台） ─────────
 for (const m of MATS_LIST) {
   const M = m.mat;
@@ -56,7 +88,7 @@ for (const m of MATS_LIST) {
   shaped(`${m.key}_hoe`, 1, 'table', ['MM.', '.S.', '.S.'], { M, S: 'stick' });
 }
 
-// ───────── 熔炉 ─────────
+// ───────── 熔炉（冶炼 = 高温下的物理/化学变化） ─────────
 smelt('iron_ingot', 1, 'iron_ore');
 smelt('gold_ingot', 1, 'gold_ore');
 smelt('crystal_shard', 1, 'crystal_ore');
@@ -65,6 +97,9 @@ smelt('stone', 1, 'cobble');
 smelt('bread', 1, 'wheat');
 smelt('coal', 1, 'wood');
 smelt('cake', 1, 'flour');
+smelt('copper_ingot', 1, 'copper_ore'); // 矿石→金属：物理分离
+smelt('salt', 1, 'saltwater'); // 蒸发结晶：水走了，盐留下来（物理变化）
+smelt('quicklime', 1, 'limestone'); // 碳酸钙高温分解：CaCO₃ → CaO + CO₂（化学变化）
 
 // ───────── 匹配 ─────────
 function rows(cells: string[], w: number, h: number): string[][] {

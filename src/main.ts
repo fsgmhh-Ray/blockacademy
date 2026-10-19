@@ -135,6 +135,8 @@ class Game {
   private padCooldown = 0;
   private nearPad: Pad | null = null;
   private npcCooldown = 0;
+  /** 探索任务计时器（离出生点距离检查节流） */
+  private exploreT = 0;
 
   private consoleOpen = false;
   private seed = Math.floor(Math.random() * 1_000_000_000);
@@ -475,6 +477,7 @@ class Game {
     // 静态地标名牌（Grayson 小屋 / 雕像）——只对村庄场景挂
     this.landmarks.clear();
     if (scene.id === 'village') this.landmarks.buildVillage(this.world);
+    if (scene.id === 'math') this.landmarks.buildMath(this.world);
     const spawnY = scene.groundY ?? this.world.groundY(scene.spawn[0], scene.spawn[1]);
     this.player.teleport(scene.spawn[0] + 0.5, spawnY + 0.6, scene.spawn[1] + 0.5);
     this.player.velocity.set(0, 0, 0);
@@ -2362,6 +2365,17 @@ class Game {
     this.updateHint();
     this.updateFollowers(dt);
     this.updateF3();
+
+    // 探索任务：离场景出生点越远越好（每 0.5s 检查一次，走够 30 格即完成）
+    if (!frozen && this.mode === 'play') {
+      this.exploreT += dt;
+      if (this.exploreT > 0.5) {
+        this.exploreT = 0;
+        const sp = this.sceneDef.spawn;
+        const d = Math.hypot(this.player.position.x - sp[0], this.player.position.z - sp[1]);
+        if (d > 30) this.bumpQuest((q) => q.kind === 'explore', 'Keep walking — there is more to find!');
+      }
+    }
 
     // JAVA 版：ESC 会自动解除指针锁定，这时就弹出暂停菜单
     if (this.edition === 'java' && this.mode === 'play' && !this.consoleOpen) {

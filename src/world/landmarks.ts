@@ -43,4 +43,24 @@ export class Landmarks {
   get current(): string {
     return this.builtFor;
   }
+
+  /** 数理学院：各区域的中英双语名牌 */
+  buildMath(w: World): void {
+    this.clear();
+    this.builtFor = 'math';
+    const spots: [string, string, number, number, number, number][] = [
+      // [主标题, 副标题, x, y, z, 缩放]
+      ['🍕 Fraction Parlor 分数披萨店', '1/2 = 2/4 = 4/8 · 等值分数', 42, 0, 52, 1.1],
+      ['📐 Geometry Garden 几何花园', '角度 · 对称 · 图形', 86, 0, 52, 1.1],
+      ['📊 Stat Tower 数据统计塔', '平均数 · 中位数 · 概率', 64, 0, 40, 1.1],
+      ['🌉 Ratio Bridge 比例大桥', '1:2 · 比与比例', 64, 0, 88, 1.1],
+      ['🧮 Number Plaza 数阵广场', '坐标 · 小数 · 时钟角度', 64, 0, 58, 1.2],
+    ];
+    for (const [title, sub, x, _y, z, scale] of spots) {
+      const sp = nameplateSprite(title, '#c9b8ff', sub);
+      sp.position.set(x + 0.5, w.groundY(x, z) + 7.2, z + 0.5);
+      sp.scale.multiplyScalar(scale);
+      this.group.add(sp);
+    }
+  }
 }

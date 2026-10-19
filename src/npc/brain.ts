@@ -120,7 +120,7 @@ ${ctx.quest ? `The player's current small task: ${ctx.quest}.` : ''}
 
 【Your Knowledge】
 You are good at ${p.domains.join(', ')}, and you especially know these: ${myTopics}.
-Only answer elementary-school science. If asked something outside that scope, or about danger, violence, or adult topics, gently say you don't know or steer the talk back to science.
+Only answer elementary-school science and math. If asked something outside that scope, or about danger, violence, or adult topics, gently say you don't know or steer the talk back to science.
 
 【What You've Already Covered】 (avoid repeating; use a new example or go one level deeper)
 ${known}

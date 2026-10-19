@@ -876,6 +876,253 @@ export const introDemo: DemoDef = {
   },
 };
 
+// ─────────── Demo 8: Fraction Pizza (Grade 4-5) ───────────
+export const fractionPizza: DemoDef = {
+  id: 'fraction_pizza',
+  title: 'The Pizza That Cuts Itself',
+  icon: '🍕',
+  bg: 0x2a1a10,
+  steps: [
+    { dur: 5, text: 'A whole pizza is 1. The bottom number (denominator) says how many equal slices we cut; the top number (numerator) says how many slices we take.' },
+    { dur: 6, text: 'Cut it into 2 equal slices and take 1 — that is 1/2, one half of the pizza.' },
+    { dur: 6, text: 'Cut each half again: 4 equal slices, take 2 — that is 2/4. Look closely: the SAME amount of pizza as 1/2!' },
+    { dur: 6, text: 'Cut once more: 8 slices, take 4 — that is 4/8. Still the same amount! 1/2 = 2/4 = 4/8, these are equivalent fractions.' },
+    { dur: 6, text: 'Equivalent fractions are the same number in different clothes: multiply (or divide) the top and bottom by the same number, and the value never changes.' },
+  ],
+  build: () => {
+    const root = new THREE.Group();
+    // 桌面 + 托盘
+    const table = new THREE.Mesh(new THREE.BoxGeometry(14, 0.5, 12), mat(0x6b4a2f));
+    table.position.y = -3.6;
+    const tray = new THREE.Mesh(new THREE.CylinderGeometry(5, 5, 0.3, 32), mat(0x8a8a8a));
+    tray.position.y = -3;
+    const crust = new THREE.Mesh(new THREE.CylinderGeometry(4.6, 4.6, 0.5, 32), mat(0xc9a84c));
+    crust.position.y = -2.6;
+    // 8 个扇区（默认隐藏，按 step 出现）——装进一个 Group 便于统一管理
+    const sliceColors = [0xc94a4a, 0x4a72c9, 0x54a34a, 0x8a5fd0];
+    const sliceGroup = new THREE.Group();
+    for (let i = 0; i < 8; i++) {
+      const geo = new THREE.CylinderGeometry(4.4, 4.4, 0.55, 24, 1, false, (i * Math.PI) / 4, Math.PI / 4);
+      const m = new THREE.Mesh(geo, mat(sliceColors[i % 4], { transparent: true, opacity: 0.92 }));
+      m.position.y = -2.55;
+      m.visible = false;
+      sliceGroup.add(m);
+    }
+    // 4 等份分割线（step2 展示 1/2）
+    const half = new THREE.Mesh(new THREE.CylinderGeometry(4.4, 4.4, 0.6, 24, 1, false, 0, Math.PI), mat(0xc94a4a, { transparent: true, opacity: 0.9 }));
+    half.position.y = -2.5;
+    const quarter = new THREE.Mesh(new THREE.CylinderGeometry(4.4, 4.4, 0.6, 24, 1, false, Math.PI / 2, Math.PI / 2), mat(0xc94a4a, { transparent: true, opacity: 0.9 }));
+    quarter.position.y = -2.5;
+    // 底部公式牌
+    const eq = label('1/2 = 2/4 = 4/8', '#ffe08a', 40);
+    eq.position.set(0, 2.6, 0);
+    eq.visible = false;
+    root.add(table, tray, crust, half, quarter, eq, sliceGroup);
+    root.add(label('Whole pizza = 1', '#eaf2ff', 26).translateY(1.2));
+    return { root, sliceGroup, half, quarter, eq };
+  },
+  tick: (s, t, step) => {
+    const slices = (s.sliceGroup as THREE.Group).children as THREE.Mesh[];
+    const half = s.half as THREE.Mesh;
+    const quarter = s.quarter as THREE.Mesh;
+    const eq = s.eq as THREE.Sprite;
+    // step0: 整张; step1: 1/2; step2: 2/4; step3: 4/8; step4: 并列公式
+    const show8 = step >= 2;
+    for (const m of slices) m.visible = show8;
+    half.visible = step === 1 || step === 4;
+    quarter.visible = step === 1 || step === 4;
+    eq.visible = step >= 3;
+    if (show8) {
+      slices.forEach((m, i) => {
+        const on = step === 2 ? i < 2 : step >= 3 ? i < 4 : i < 8;
+        m.visible = on;
+        (m.material as THREE.MeshLambertMaterial).opacity = on ? 0.95 : 0.25;
+      });
+    }
+    void t;
+  },
+  cam: (s, t, step, camera) => {
+    void s;
+    const r = 15 - Math.min(step, 4) * 0.6;
+    ORBIT(camera, 0, -1.4, 0, r, 10 + step * 0.8, t * 0.5);
+  },
+};
+
+// ─────────── Demo 9: Angle Spinner (Grade 4) ───────────
+export const angleSpinner: DemoDef = {
+  id: 'angle_spinner',
+  title: 'The Turning Ray',
+  icon: '📐',
+  bg: 0x0d1a2a,
+  steps: [
+    { dur: 5, text: 'An angle is a TURN. Two rays start at the same point (the vertex); how much one turns away from the other is the size of the angle, measured in degrees.' },
+    { dur: 6, text: 'A quarter turn is 90° — that is a right angle, the corner of a square. The little square symbol in a diagram means exactly 90°.' },
+    { dur: 6, text: 'A half turn is 180° — the two rays form a straight line. 30° is a small turn, 150° is a wide one.' },
+    { dur: 6, text: 'A full circle is 360°. So every angle is a fraction of a full turn: 90° = 1/4 turn, 180° = 1/2 turn, 270° = 3/4 turn.' },
+    { dur: 6, text: 'Use a protractor: put its center on the vertex, line up 0° with one ray, and read where the other ray points. That number is the angle in degrees.' },
+  ],
+  build: () => {
+    const root = new THREE.Group();
+    // 量角器半圆底盘
+    const dial = new THREE.Mesh(new THREE.RingGeometry(1.5, 6, 48, 1, 0, Math.PI), mat(0xdfe8f5, { transparent: true, opacity: 0.35, side: THREE.DoubleSide }));
+    dial.rotation.x = -Math.PI / 2;
+    // 刻度（每 15° 一格）
+    for (let a = 0; a <= 180; a += 15) {
+      const rad = (a * Math.PI) / 180;
+      const len = a % 45 === 0 ? 1.1 : 0.6;
+      const tickGeo = new THREE.BoxGeometry(0.12, 0.06, len);
+      const tick = new THREE.Mesh(tickGeo, mat(a % 90 === 0 ? 0xc94a4a : 0x6a7a9a));
+      const r = 6 - len / 2;
+      tick.position.set(Math.cos(rad) * r, 0.02, -Math.sin(rad) * r);
+      tick.rotation.y = -rad;
+      root.add(tick);
+    }
+    // 中心顶点 + 固定射线 + 旋转射线
+    const vertex = vsphere(0x4a72c9, 0.28);
+    const fixedRay = new THREE.Mesh(new THREE.BoxGeometry(5.6, 0.14, 0.14), mat(0x3a3a4a));
+    fixedRay.position.set(2.8, 0.06, 0);
+    const spinner = new THREE.Group();
+    const ray = new THREE.Mesh(new THREE.BoxGeometry(5.6, 0.14, 0.14), mat(0xc94a4a));
+    ray.position.set(2.8, 0.06, 0);
+    // 弧线显示扫过的角度
+    const arc = new THREE.Mesh(new THREE.RingGeometry(3.2, 3.6, 32, 1, 0, Math.PI / 2), mat(0xffd45a, { transparent: true, opacity: 0.85, side: THREE.DoubleSide }));
+    arc.rotation.x = -Math.PI / 2;
+    arc.visible = false;
+    spinner.add(ray);
+    root.add(dial, vertex, fixedRay, spinner, arc);
+    const deg = label('90°', '#ffe08a', 40);
+    deg.position.set(0, 2.2, 0);
+    root.add(deg);
+    return { root, spinner, arc, deg };
+  },
+  tick: (s, t, step) => {
+    const spinner = s.spinner as THREE.Group;
+    const arc = s.arc as THREE.Mesh;
+    const deg = s.deg as THREE.Sprite;
+    const angles = [30, 60, 90, 180, 90];
+    const a = angles[Math.min(step, 4)];
+    const target = (a * Math.PI) / 180;
+    spinner.rotation.y = target + Math.sin(t * 0.6) * 0.02;
+    arc.visible = step >= 1 && step <= 3;
+    if (arc.visible) {
+      (arc.geometry as THREE.RingGeometry).dispose();
+      arc.geometry = new THREE.RingGeometry(3.2, 3.6, 32, 1, 0, Math.max(0.05, target));
+    }
+    if (deg.visible !== step >= 1) deg.visible = step >= 1;
+    const mat2 = deg.material as THREE.SpriteMaterial;
+    if (mat2.map) (mat2.map as THREE.CanvasTexture).dispose();
+    mat2.map = new THREE.CanvasTexture(spriteText(`${a}°`, '#ffe08a'));
+    mat2.needsUpdate = true;
+  },
+  cam: (s, t, step, camera) => {
+    void s;
+    ORBIT(camera, 0, 0.5, 0, 14 - step * 0.5, 9 + step, t * 0.4);
+  },
+};
+
+/** 画一个文字 sprite 贴图（角度演示动态更新度数用） */
+function spriteText(text: string, color: string): HTMLCanvasElement {
+  const c = document.createElement('canvas');
+  c.width = 192;
+  c.height = 96;
+  const ctx = c.getContext('2d')!;
+  ctx.fillStyle = 'rgba(10,14,24,0.55)';
+  ctx.beginPath();
+  ctx.roundRect?.(0, 0, c.width, c.height, 14);
+  ctx.fill();
+  ctx.fillStyle = color;
+  ctx.font = 'bold 56px system-ui, sans-serif';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(text, c.width / 2, c.height / 2 + 2);
+  return c;
+}
+
+// ─────────── Demo 10: Chemistry Volcano (acid + base) ───────────
+export const chemVolcano: DemoDef = {
+  id: 'chem_volcano',
+  title: 'Volcano in a Flask',
+  icon: '🌋',
+  bg: 0x1a0f0a,
+  steps: [
+    { dur: 5, text: 'On the bench: a conical flask, white baking soda (sodium bicarbonate), and a bottle of vinegar (acetic acid). Two ordinary kitchen things.' },
+    { dur: 5, text: 'Baking soda is a base and vinegar is an acid. When they meet, they neutralize each other — an acid-base reaction.' },
+    { dur: 6, text: 'The reaction makes carbon dioxide gas — thousands of tiny bubbles rushing out of the flask, foaming over the rim just like a little volcano!' },
+    { dur: 5, text: 'Carbon dioxide is heavier than air and does not support burning — pour it over a candle flame and the flame "goes out" instantly.' },
+    { dur: 6, text: 'The foam left behind is mostly water and sodium acetate. New substances were made — this is a chemical change, and it cannot be undone.' },
+  ],
+  build: () => {
+    const root = new THREE.Group();
+    const bench = new THREE.Mesh(new THREE.BoxGeometry(16, 0.5, 10), mat(0x5a3a22));
+    bench.position.y = -4;
+    // 锥形瓶（玻璃锥 + 透明瓶身示意）
+    const flask = new THREE.Mesh(new THREE.ConeGeometry(2.2, 3.4, 24, 1, true), mat(0xbfe8ff, { transparent: true, opacity: 0.28, side: THREE.DoubleSide }));
+    flask.position.set(-3, -1.2, 0);
+    const liquid = new THREE.Mesh(new THREE.ConeGeometry(1.9, 2.6, 24), mat(0xd8c8f0, { transparent: true, opacity: 0.8 }));
+    liquid.position.set(-3, -2, 0);
+    const soda = new THREE.Mesh(new THREE.SphereGeometry(0.5, 12, 12), mat(0xffffff));
+    soda.position.set(-3, 0.9, 0);
+    // 醋瓶
+    const bottle = new THREE.Mesh(new THREE.CylinderGeometry(0.7, 0.7, 2.2, 16), mat(0x6a4a8a));
+    bottle.position.set(3, -2.6, 0.4);
+    const cork = new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.3, 0.4, 12), mat(0x8a5a2a));
+    cork.position.set(3, -1.3, 0.4);
+    // 蜡烛 + 火焰（被 CO2 浇灭）
+    const candle = new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.3, 1.4, 12), mat(0xf0e8d8));
+    candle.position.set(0.5, -3.2, -2.5);
+    const wick = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.06, 0.3, 8), mat(0x3a3a3a));
+    wick.position.set(0.5, -2.35, -2.5);
+    const flame = new THREE.Mesh(new THREE.ConeGeometry(0.28, 0.8, 10), mat(0xffa53a, { emissive: 0xff8a1a }));
+    flame.position.set(0.5, -1.85, -2.5);
+    // 气泡粒子
+    const bubbles = particles(220, 0xf2fbff, 0.3);
+    // CO2 倾泻粒子（浇灭火焰）
+    const pour = particles(90, 0xd8d8e8, 0.22);
+    root.add(bench, flask, liquid, soda, bottle, cork, candle, wick, flame, bubbles, pour);
+    root.add(label('Baking soda 小苏打', '#ffffff', 24).translateY(2.6).translateX(-3));
+    root.add(label('Vinegar 醋', '#c9a8ff', 24).translateY(0.6).translateX(3));
+    return { root, flask, liquid, soda, bottle, bubbles, flame, pour, cork };
+  },
+  tick: (s, t, step) => {
+    const liquid = s.liquid as THREE.Mesh;
+    const soda = s.soda as THREE.Mesh;
+    const bottle = s.bottle as THREE.Mesh;
+    const cork = s.cork as THREE.Mesh;
+    const flame = s.flame as THREE.Mesh;
+    const bub = s.bubbles as THREE.Points;
+    const pour = s.pour as THREE.Points;
+    // step0: 展示材料; step1: 醋倒入; step2: 火山喷发; step3: CO2 浇灭火焰; step4: 总结
+    bottle.position.x = step === 1 ? 3 - (1 - Math.cos(t * 1.2)) * 0.8 : 3;
+    bottle.rotation.z = step === 1 ? -0.6 : 0;
+    cork.visible = step !== 1;
+    soda.visible = step <= 1;
+    liquid.scale.y = step >= 1 ? 1.25 : 1;
+    (bub.material as THREE.PointsMaterial).opacity = step === 2 ? 0.95 : 0;
+    if (step === 2) {
+      setParticles(bub, (i, v) => {
+        const p = (t * 0.9 + i * 0.045) % 1;
+        const a = i * 0.7;
+        const r = 0.3 + p * 1.6;
+        v.set(-3 + Math.cos(a) * r * 0.6, -1.4 + p * 5.2, Math.sin(a) * r * 0.6);
+      });
+    }
+    flame.visible = step <= 2;
+    flame.scale.setScalar(1 + Math.sin(t * 12) * 0.15);
+    (pour.material as THREE.PointsMaterial).opacity = step === 3 ? 0.9 : 0;
+    if (step === 3) {
+      setParticles(pour, (i, v) => {
+        const p = (t * 1.4 + i * 0.05) % 1;
+        v.set(0.5 - p * 3.2, -1.4 - p * 2.2, -2.5 + Math.sin(i) * 0.3);
+      });
+    }
+  },
+  cam: (s, t, step, camera) => {
+    void s;
+    const r = step === 2 ? 11 : 13;
+    ORBIT(camera, 0, -1.6, -1, r, 6 + step * 0.4, t * 0.45);
+  },
+};
+
 export const DEMOS: DemoDef[] = [
   introDemo,
   waterCycle,
@@ -887,6 +1134,9 @@ export const DEMOS: DemoDef[] = [
   rainbowDemo,
   leverDemo,
   strataDemo,
+  fractionPizza,
+  angleSpinner,
+  chemVolcano,
 ];
 
 export const DEMO_BY_ID = new Map(DEMOS.map((d) => [d.id, d]));

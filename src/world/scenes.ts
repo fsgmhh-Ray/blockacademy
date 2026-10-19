@@ -65,7 +65,7 @@ function pathLine(w: World, x0: number, z0: number, x1: number, z1: number, id: 
   }
 }
 
-/** 长在地上、不算「地形」的方块：树叶、木头、花草作物 */
+/** 长在地上、不算「地形」的方块：树叶、木头、花草作物、悬空装饰 */
 const FOLIAGE = new Set<number>([
   blocks.leaves,
   blocks.wood,
@@ -80,6 +80,9 @@ const FOLIAGE = new Set<number>([
   blocks.wheat,
   blocks.cactus,
   blocks.hay,
+  blocks.star,
+  blocks.cloud,
+  blocks.gas,
 ]);
 
 /**
@@ -131,8 +134,9 @@ function gateRoad(w: World, x0: number, z0: number, x1: number, z1: number, road
         const x = cx + ox;
         const z = cz + oz;
         if (x < 1 || z < 1 || x >= w.sx - 1 || z >= w.sz - 1) continue;
-        // 头顶清空 5 格，管它是山体还是树
-        for (let y = roadY; y < roadY + 5; y++) w.putFast(x, y, z, 0);
+        // 头顶清空 10 格（树最高 7 格，必须全清掉，否则树叶会架在传送台正上方，
+        // 让 groundY 把台子"抬"到树冠上——玩家永远走不到这个台）
+        for (let y = roadY; y < roadY + 10; y++) w.putFast(x, y, z, 0);
         // 路面：中线铺石砖，两侧碎石
         w.putFast(x, roadY - 1, z, ox === 0 && oz === 0 ? blocks.stoneBrick : blocks.gravel);
         // 路面下方填实，避免整平后留下悬空深坑
@@ -330,6 +334,207 @@ function ball(w: World, cx: number, cy: number, cz: number, r: number, id: numbe
       }
 }
 
+// ───────────────── 数理学院建筑 ─────────────────
+
+/** 整平一小块地面到统一标高（学院地坪） */
+function flattenArea(w: World, cx: number, cz: number, r: number, floor: number): number {
+  const g = groundAt(w, cx, cz);
+  for (let x = cx - r; x <= cx + r; x++)
+    for (let z = cz - r; z <= cz + r; z++) {
+      if (!w.inBounds(x, 1, z)) continue;
+      const gg = groundAt(w, x, z);
+      for (let y = gg; y < g; y++) w.putFast(x, y, z, blocks.cobble);
+      for (let y = g; y > gg; y--) w.putFast(x, y, z, 0);
+      w.putFast(x, g - 1, z, floor);
+    }
+  return g;
+}
+
+/** 分数披萨店：8 等份大披萨（4 色交替 + 切缝）+ 等值分数墙（1/2 = 2/4 = 4/8） */
+function fractionParlor(w: World, cx: number, cz: number): void {
+  const g = flattenArea(w, cx, cz, 10, blocks.quartz);
+  // 披萨托盘 + 饼底
+  for (let x = -8; x <= 8; x++)
+    for (let z = -8; z <= 8; z++) {
+      const d = Math.hypot(x, z);
+      if (d > 8) continue;
+      w.putFast(cx + x, g, cz + z, blocks.stoneBrick);
+      if (d <= 7) w.putFast(cx + x, g + 1, cz + z, blocks.woolYellow);
+    }
+  // 8 扇区上色 + 切缝
+  for (let x = -7; x <= 7; x++)
+    for (let z = -7; z <= 7; z++) {
+      if (Math.hypot(x, z) > 6.4) continue;
+      const f = ((Math.atan2(z, x) + Math.PI) / (Math.PI * 2)) * 8;
+      const nearSeam = Math.abs(f - Math.round(f)) < 0.07;
+      const sec = Math.floor(f) % 8;
+      const id = [blocks.woolRed, blocks.woolBlue, blocks.woolGreen, blocks.woolPurple][sec % 4];
+      w.putFast(cx + x, g + 1, cz + z, nearSeam ? blocks.cobble : id);
+    }
+  column(w, cx, cz, g + 1, g + 2, blocks.quartz);
+  w.putFast(cx, g + 3, cz, blocks.lamp);
+  // 等值分数墙（北侧）：8 格宽的板，三行分别演示 1/2、2/4、4/8 —— 上色永远一半
+  const wallZ = cz - 10;
+  const x0 = cx - 4;
+  for (let row = 0; row < 3; row++) {
+    for (let i = 0; i < 8; i++) {
+      let colored = false;
+      if (row === 0) colored = i < 4; // 1/2：一半上色
+      if (row === 1) colored = Math.floor(i / 2) % 2 === 0; // 2/4：每 2 格一段
+      if (row === 2) colored = i % 2 === 0; // 4/8：每 1 格一段
+      w.putFast(x0 + i, g + 1, wallZ + row, colored ? blocks.woolRed : blocks.woolWhite);
+    }
+    // 行尾一盏灯当"小数点"
+    w.putFast(x0 + 8, g + 1, wallZ + row, blocks.lamp);
+  }
+}
+
+/** 几何花园：角度转盘（12 射线每 30°）+ 对称花园（中轴两侧完全镜像） */
+function geometryGarden(w: World, cx: number, cz: number): void {
+  const g = flattenArea(w, cx, cz, 11, blocks.stoneBrick);
+  // 角度转盘：圆盘 + 12 根射线（每 90° 一根红色 = 直角标记）
+  for (let x = -7; x <= 7; x++)
+    for (let z = -7; z <= 7; z++) {
+      if (Math.hypot(x, z) > 7) continue;
+      w.putFast(cx + x, g, cz + z, blocks.quartz);
+    }
+  for (let i = 0; i < 12; i++) {
+    const a = (i / 12) * Math.PI * 2;
+    for (let r = 2; r <= 6; r++) {
+      w.putFast(cx + Math.round(Math.cos(a) * r), g, cz + Math.round(Math.sin(a) * r), i % 3 === 0 ? blocks.woolRed : blocks.stoneBrick);
+    }
+  }
+  column(w, cx, cz, g, g + 3, blocks.metal);
+  w.putFast(cx, g + 4, cz, blocks.lamp);
+  // 对称花园（转盘东侧）：石英中轴 + 两侧镜像装饰
+  const sx = cx + 9;
+  for (let i = 0; i <= 12; i++) w.putFast(sx, g, cz - 6 + i, blocks.quartz);
+  const deco: [number, number, number][] = [
+    [2, -4, blocks.wood],
+    [2, -4, blocks.wood],
+    [3, -3, blocks.leaves],
+    [2, 0, blocks.flowerRed],
+    [3, 1, blocks.flowerYellow],
+    [4, 3, blocks.wood],
+    [4, 3, blocks.wood],
+    [5, 4, blocks.leaves],
+    [2, 5, blocks.woolBlue],
+    [3, 6, blocks.woolBlue],
+  ];
+  for (const [dx, dz, id] of deco) {
+    w.putFast(sx - dx, g, cz + dz, id);
+    w.putFast(sx + dx, g, cz + dz, id);
+  }
+  tree(w, sx - 6, cz - 2, 4);
+  tree(w, sx + 6, cz - 2, 4);
+}
+
+/** 数据统计塔：石砖塔 + 塔前柱状图（5 根不同高度颜色的羊毛柱）+ 天平 */
+function statTower(w: World, cx: number, cz: number): void {
+  const g = flattenArea(w, cx, cz, 13, blocks.stoneBrick);
+  // 塔身
+  box(w, cx - 3, g, cz - 3, cx + 3, g + 5, cz + 3, blocks.stoneBrick, true);
+  box(w, cx - 3, g, cz - 3, cx + 3, g, cz + 3, blocks.quartz);
+  for (let y = g + 1; y <= g + 2; y++) w.putFast(cx, y, cz + 3, 0);
+  // 塔内书架 + 塔顶灯
+  w.putFast(cx - 2, g + 1, cz, blocks.bookshelf);
+  w.putFast(cx + 2, g + 1, cz, blocks.bookshelf);
+  w.putFast(cx, g + 6, cz, blocks.lamp);
+  // 柱状图（投票结果：5/3/4/2/6）
+  const bars: [number, number, number][] = [
+    [-10, 5, blocks.woolRed],
+    [-6, 3, blocks.woolBlue],
+    [-2, 4, blocks.woolGreen],
+    [2, 2, blocks.woolYellow],
+    [6, 6, blocks.woolPurple],
+  ];
+  for (const [dx, h, id] of bars) {
+    w.putFast(cx + dx, g, cz + 7, blocks.stoneBrick);
+    for (let y = 1; y <= h; y++) w.putFast(cx + dx, g + y, cz + 7, id);
+    w.putFast(cx + dx, g + h + 1, cz + 7, blocks.lamp);
+  }
+  // 天平（平均数：移到平衡就平均了）
+  const bx = cx - 12;
+  const bz = cz + 7;
+  column(w, bx, bz, g + 1, g + 3, blocks.wood);
+  w.putFast(bx, g + 4, bz, blocks.wood);
+  w.putFast(bx - 3, g + 3, bz, blocks.quartz);
+  w.putFast(bx + 3, g + 3, bz, blocks.quartz);
+  w.putFast(bx - 3, g + 2, bz, blocks.woolRed);
+  w.putFast(bx + 3, g + 2, bz, blocks.woolBlue);
+}
+
+/** 比例大桥：桥面 + 每 2 格 1 根栏杆柱（1:2）+ 桥尽头十级"百分数山" */
+function ratioBridge(w: World, x0: number, z0: number, z1: number): void {
+  const g = groundAt(w, x0, z0);
+  for (let i = 0; i <= z1 - z0; i++) {
+    const z = z0 + i;
+    // 桥面 + 桥墩
+    w.putFast(x0, g, z, blocks.plank);
+    if (i % 6 === 0) for (let y = g - 4; y < g; y++) w.putFast(x0, y, z, blocks.stoneBrick);
+    // 栏杆柱：每 2 格 1 根（比例 1:2），扶手连续
+    if (i % 2 === 0) {
+      w.putFast(x0 - 2, g + 1, z, blocks.wood);
+      w.putFast(x0 - 2, g + 2, z, blocks.wood);
+      w.putFast(x0 + 2, g + 1, z, blocks.wood);
+      w.putFast(x0 + 2, g + 2, z, blocks.wood);
+    }
+    w.putFast(x0 - 2, g + 3, z, blocks.plank);
+    w.putFast(x0 + 2, g + 3, z, blocks.plank);
+  }
+  // 百分数山：10% 到 100%，一级一级高起来，100% 处点灯
+  const pz = z1 + 9;
+  for (let i = 1; i <= 10; i++) {
+    const px = x0 - 11 + i * 2;
+    for (let y = g; y < g + i; y++) w.putFast(px, y, pz, blocks.woolRed);
+    w.putFast(px, g + i, pz, i === 10 ? blocks.lamp : blocks.woolYellow);
+  }
+}
+
+/** 小数步道：10 级台阶，颜色两两渐变（0.1 → 1.0 的数轴） */
+function decimalSteps(w: World, x: number, z: number): void {
+  const g = groundAt(w, x, z);
+  const colors = [blocks.woolRed, blocks.woolRed, blocks.woolYellow, blocks.woolYellow, blocks.woolGreen, blocks.woolGreen, blocks.woolBlue, blocks.woolBlue, blocks.woolPurple, blocks.woolPurple];
+  for (let i = 0; i < 10; i++) {
+    const h = Math.floor((i + 1) / 2) + 1;
+    for (let y = g; y <= g + h; y++) w.putFast(x + i, y, z, colors[i]);
+    w.putFast(x + i, g + h + 1, z, blocks.woolWhite);
+  }
+}
+
+/** 钟楼：数阵广场中央，北面钟面 = 角度教学（3 点整，时针分针成 90°） */
+function clockTower(w: World, cx: number, cz: number): void {
+  const g = groundAt(w, cx, cz);
+  for (let x = -2; x <= 2; x++)
+    for (let z = -2; z <= 2; z++) w.putFast(cx + x, g, cz + z, blocks.quartz);
+  for (let y = g + 1; y <= g + 7; y++) {
+    w.putFast(cx, y, cz, blocks.stoneBrick);
+    for (const [dx, dz] of [
+      [-1, -1],
+      [1, -1],
+      [-1, 1],
+      [1, 1],
+    ] as [number, number][])
+      w.putFast(cx + dx, y, cz + dz, blocks.stoneBrick);
+  }
+  w.putFast(cx, g + 8, cz, blocks.lamp);
+  // 钟面（北面竖直平面 z-2）：白盘 + 12 个红刻度 + 指针（3 点整）
+  for (let x = -3; x <= 3; x++)
+    for (let y = -3; y <= 3; y++) {
+      if (Math.hypot(x, y) > 3.2) continue;
+      w.putFast(cx + x, g + 4 + y, cz - 2, blocks.woolWhite);
+    }
+  for (let i = 0; i < 12; i++) {
+    const a = (i / 12) * Math.PI * 2 - Math.PI / 2;
+    w.putFast(cx + Math.round(Math.cos(a) * 2.4), g + 4 + Math.round(Math.sin(a) * 2.4), cz - 2, blocks.woolRed);
+  }
+  // 分针指向 12，时针指向 3 —— 正好 90°
+  w.putFast(cx, g + 6, cz - 2, blocks.cobble);
+  w.putFast(cx, g + 5, cz - 2, blocks.cobble);
+  w.putFast(cx + 1, g + 4, cz - 2, blocks.cobble);
+  w.putFast(cx + 2, g + 4, cz - 2, blocks.cobble);
+}
+
 export const SCENES: SceneDef[] = [
   // ───────────────── 1. 村庄广场 ─────────────────
   {
@@ -356,6 +561,7 @@ export const SCENES: SceneDef[] = [
       { x: 40, z: 64, label: '🗺️ To: Lively Forest', goto: 'forest' },
       { x: 88, z: 64, label: '🗺️ To: Wandering River', goto: 'river' },
       { x: 64, z: 40, label: '🗺️ To: Crystal Caverns', goto: 'cave' },
+      { x: 88, z: 88, label: '🔢 To: Math Academy', goto: 'math' },
     ],
     build: (w) => {
       const field = heightField(w.sx, { base: 15, amp: 3.2, scale: 0.028, seed: 3, shape: rimShape });
@@ -455,6 +661,12 @@ export const SCENES: SceneDef[] = [
         platform(w, p.x, p.z, 2, roadY - 1, blocks.portal);
         column(w, p.x, p.z, roadY, roadY + 1, blocks.portal);
       }
+      // 数理学院传送座（东南空地，与 Grayson 小屋/农田都隔开）——先从广场修一条大道过去，
+      // 否则 padPlaza 整出的台子会被野外的树和土坡围成孤岛（BFS 走不到）
+      gateRoad(w, 64, 64, 88, 88, roadY);
+      for (let y = roadY; y < roadY + 4; y++) w.putFast(88, y, 88, 0);
+      platform(w, 88, 88, 2, roadY - 1, blocks.portal);
+      column(w, 88, 88, roadY, roadY + 1, blocks.portal);
       platform(w, 64, 74, 2, roadY - 1, blocks.woolGreen);
       w.putFast(64, roadY, 74, blocks.board);
     },
@@ -838,8 +1050,13 @@ export const SCENES: SceneDef[] = [
       ];
       bigDipper.forEach(([x, z]) => ball(w, x, 34, z, 1, blocks.star));
       // 演示台与传送
+      // 用 terrainY 而不是 groundAt：天台 scatter 的星星块是悬空装饰（y 30..39），
+      // groundAt 会把台子架到星星上（BFS 走不到，概率性复现）。
+      // put 前把台子正上方一路清到天空顶——把飘到传送台上方的星星全部扫开，
+      // 否则 smoke 的 padY（groundY 语义）会被星星抬高，判定"不可达"。
       const put = (x: number, z: number, id: number) => {
-        const g = groundAt(w, x, z);
+        const g = terrainY(w, x, z);
+        for (let y = g; y < w.sy - 1; y++) w.putFast(x, y, z, 0);
         platform(w, x, z, 2, g - 1, id);
       };
       put(64, 68, blocks.woolBlue);
@@ -879,8 +1096,10 @@ export const SCENES: SceneDef[] = [
       { x: 50, z: 92, label: '⚡ Light up a bulb', demo: 'circuit' },
       { x: 66, z: 95, label: '🌈 Splitting light', demo: 'rainbow' },
       { x: 82, z: 92, label: '🔧 Does a lever save effort?', demo: 'lever' },
+      { x: 74, z: 92, label: '🌋 Volcano in a flask', demo: 'chem_volcano' },
       { x: 40, z: 96, label: '🗺️ Back to Village', goto: 'village' },
       { x: 88, z: 96, label: '🗺️ To: Starry Observatory', goto: 'observatory' },
+      { x: 64, z: 106, label: '🔢 To: Math Academy', goto: 'math' },
     ],
     build: (w) => {
       const field = heightField(w.sx, { base: 18, amp: 1.6, scale: 0.02, seed: 202, shape: rimShape, terrace: false });
@@ -941,12 +1160,18 @@ export const SCENES: SceneDef[] = [
         }
       }
       // 演示台（彩虹台在弧前的地面上，不在弧顶——弧顶 14 格高，走不上去）
-      const put = (x: number, z: number, id: number) => platform(w, x, z, 2, groundAt(w, x, z) - 1, id);
+      const put = (x: number, z: number, id: number) => {
+        const g = groundAt(w, x, z);
+        for (let y = g; y < g + 6; y++) w.putFast(x, y, z, 0);
+        platform(w, x, z, 2, g - 1, id);
+      };
       put(50, 92, blocks.woolBlue);
       put(66, 95, blocks.woolRed);
       put(82, 92, blocks.woolYellow);
+      put(74, 92, blocks.woolRed); // 化学火山演示台
       put(40, 96, blocks.portal);
       put(88, 96, blocks.portal);
+      put(64, 106, blocks.portal); // 去数理学院
       scatter(w, 24, 333, (x, z) => {
         const g = groundAt(w, x, z);
         if (g > 19 && (x < 36 || x > 92 || z < 64 || z > 106)) tree(w, x, z, 4);
@@ -956,6 +1181,86 @@ export const SCENES: SceneDef[] = [
           const g = groundAt(w, x, z);
           w.putFast(x, g, z, blocks.lamp);
         }
+    },
+  },
+
+  // ───────────────── 7. 数理学院 ─────────────────
+  {
+    id: 'math',
+    name: 'Math Academy',
+    icon: '🔢',
+    subtitle: 'Numbers, Shapes & Fair Shares',
+    brief: 'Grade 4+ math lives here as buildings you can walk through: cut a pizza into fractions, spin an angle dial, cross a bridge built on ratios, and read the bar graphs on the Stat Tower.',
+    topics: ['fraction_equivalent', 'fraction_add', 'decimal_place', 'ratio', 'percent', 'angle_measure', 'triangle_types', 'symmetry', 'area_perimeter', 'volume', 'coordinate_plane', 'data_display', 'mean_median_mode', 'probability', 'expressions', 'equations', 'order_of_operations', 'prime_composite'],
+    sky: 0xc9d8ff,
+    fogColor: 0xe0e8ff,
+    fogDensity: 0.005,
+    ambient: 0.8,
+    sun: 0.95,
+    stars: false,
+    night: false,
+    spawn: [64, 64],
+    npcs: [
+      { p: 'fiona', x: 42, z: 58, roam: 4 },
+      { p: 'gideon', x: 86, z: 58, roam: 5 },
+      { p: 'sylvia', x: 64, z: 50, roam: 4 },
+    ],
+    pads: [
+      { x: 42, z: 76, label: '🍕 Equal-value fractions', demo: 'fraction_pizza' },
+      { x: 86, z: 76, label: '📐 Angles all around us', demo: 'angle_spinner' },
+      { x: 40, z: 96, label: '🗺️ Back to Village', goto: 'village' },
+      { x: 88, z: 96, label: '🗺️ To: Wonder Lab', goto: 'lab' },
+    ],
+    build: (w) => {
+      const field = heightField(w.sx, { base: 18, amp: 1.4, scale: 0.02, seed: 303, shape: rimShape, terrace: false });
+      paintTerrain(w, field, { top: blocks.grass, sub: blocks.dirt, deep: blocks.stone });
+      // 学院地坪：黑白棋盘 = 坐标平面
+      for (let x = 30; x <= 98; x++)
+        for (let z = 30; z <= 98; z++) {
+          const g = groundAt(w, x, z);
+          w.putFast(x, g - 1, z, ((x >> 2) + (z >> 2)) % 2 === 0 ? blocks.quartz : blocks.stoneBrick);
+          for (let y = g; y < g + 14; y++) w.putFast(x, y, z, 0);
+        }
+      // 中央钟楼广场（3 点整 = 时针分针成 90°）
+      clockTower(w, 64, 64);
+      // 西：分数披萨店
+      fractionParlor(w, 42, 64);
+      // 东：几何花园
+      geometryGarden(w, 86, 64);
+      // 北：数据统计塔
+      statTower(w, 64, 38);
+      // 南：比例大桥 + 百分数山
+      ratioBridge(w, 64, 72, 96);
+      // 东南：小数步道
+      decimalSteps(w, 92, 84);
+      // 路灯 + 花草点缀
+      for (let x = 36; x <= 92; x += 8)
+        for (let z = 36; z <= 92; z += 8) {
+          const g = groundAt(w, x, z);
+          if (g > 19 && g < 24) w.putFast(x, g, z, blocks.lamp);
+        }
+      scatter(w, 30, 606, (x, z) => {
+        if (x < 30 || x > 98 || z < 30 || z > 98) return;
+        const g = groundAt(w, x, z);
+        if (g <= 19) return;
+        // 只在空地点缀（不压建筑）：查上方与脚下
+        if (w.get(x, g, z) !== 0) return;
+        const r = Math.random();
+        if (r < 0.4) w.putFast(x, g, z, blocks.tallGrass);
+        else if (r < 0.6) w.putFast(x, g, z, blocks.flowerRed);
+        else if (r < 0.75) w.putFast(x, g, z, blocks.flowerYellow);
+        else if (r < 0.85) w.putFast(x, g, z, blocks.flowerBlue);
+        else w.putFast(x, g, z, blocks.flowerWhite);
+      });
+      // 传送座与演示台（padPlaza 整平，杜绝架到树上）
+      const put = (x: number, z: number, id: number) => {
+        const p = padPlaza(w, x, z);
+        platform(w, x, z, 2, p - 1, id);
+      };
+      put(42, 76, blocks.woolYellow);
+      put(86, 76, blocks.woolBlue);
+      put(40, 96, blocks.portal);
+      put(88, 96, blocks.portal);
     },
   },
 ];

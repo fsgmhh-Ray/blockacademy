@@ -89,6 +89,31 @@ export const QUESTS: Quest[] = [
     desc: 'Place 12 blocks in the lab',
     need: 12,
   },
+  demo('lab', 'chem_volcano', 'Volcano in a flask', 'Watch the baking-soda-and-vinegar volcano and name the gas that rushes out.'),
+  // Math Academy (Grade 4+)
+  talk('math', 'fiona', 'Slice with Fiona', 'Ask Fraction Fiona to cut you a slice — and ask what 2/4 really equals.'),
+  talk('math', 'gideon', 'Patrol with Gideon', 'Chat with Geo Gideon and estimate an angle before he measures it.'),
+  talk('math', 'sylvia', 'Count with Sylvia', 'Ask Stat Sylvia what "average" really means, and how she would graph your answers.'),
+  demo('math', 'fraction_pizza', 'Cut the pizza yourself', 'Watch "The Pizza That Cuts Itself" and see why 1/2 = 2/4 = 4/8.'),
+  demo('math', 'angle_spinner', 'Turn a ray', 'Watch "The Turning Ray" and match 30°, 60°, 90° and 180° to real turns.'),
+  {
+    id: 'explore_math',
+    scene: 'math',
+    icon: '🧭',
+    kind: 'explore',
+    title: 'Walk the whole academy',
+    desc: 'Walk more than 30 blocks from the entrance and visit the Pizza Parlor, the Garden, the Bridge and the Stat Tower.',
+    need: 30,
+  },
+  {
+    id: 'build_math',
+    scene: 'math',
+    icon: '🧱',
+    kind: 'build',
+    title: 'Build something mathematical',
+    desc: 'Place 12 blocks in the academy — try a symmetric shape or a bar graph of your own!',
+    need: 12,
+  },
 ];
 
 export const REWARDS: Record<string, { icon: string; name: string }> = {
@@ -98,6 +123,7 @@ export const REWARDS: Record<string, { icon: string; name: string }> = {
   cave: { icon: '🪨', name: 'Geo Time Badge' },
   observatory: { icon: '✨', name: 'Star Explorer Badge' },
   lab: { icon: '⚡', name: 'Lab Whiz Badge' },
+  math: { icon: '🔢', name: 'Number Master Badge' },
 };
 
 export function questsOf(scene: string): Quest[] {
