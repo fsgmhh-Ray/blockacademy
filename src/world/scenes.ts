@@ -65,6 +65,95 @@ function pathLine(w: World, x0: number, z0: number, x1: number, z1: number, id: 
   }
 }
 
+/** 长在地上、不算「地形」的方块：树叶、木头、花草作物 */
+const FOLIAGE = new Set<number>([
+  blocks.leaves,
+  blocks.wood,
+  blocks.plank,
+  blocks.tallGrass,
+  blocks.flowerRed,
+  blocks.flowerYellow,
+  blocks.flowerBlue,
+  blocks.flowerPink,
+  blocks.flowerWhite,
+  blocks.mushroom,
+  blocks.wheat,
+  blocks.cactus,
+  blocks.hay,
+]);
+
+/**
+ * 真正的地面高度：从天空往下找第一块「地形」方块。
+ * groundAt 会把树叶/木头当成地面，传送台因此常被架到树冠或屋顶上，玩家根本走不过来。
+ */
+function terrainY(w: World, x: number, z: number): number {
+  for (let y = w.sy - 1; y >= 0; y--) {
+    const b = w.get(x, y, z);
+    if (b !== 0 && !FOLIAGE.has(b)) return y + 1;
+  }
+  return 1;
+}
+
+/**
+ * 传送台广场：以真实地面为标高，清出一小块空地并整平。
+ * 返回广场地面高度（站立层）。r 是半径。
+ */
+function padPlaza(w: World, cx: number, cz: number, r = 3): number {
+  const y = terrainY(w, cx, cz);
+  for (let dx = -r; dx <= r; dx++)
+    for (let dz = -r; dz <= r; dz++) {
+      const x = cx + dx;
+      const z = cz + dz;
+      // 清掉这一柱子里长上来的树和草，露出地面
+      for (let yy = y; yy < y + 10; yy++) w.putFast(x, yy, z, 0);
+      // 广场地面
+      w.putFast(x, y - 1, z, blocks.grass);
+      // 下方填实，避免整平出深坑
+      for (let yy = y - 2; yy >= 1 && yy >= y - 5; yy--) if (w.get(x, yy, z) === 0) w.putFast(x, yy, z, blocks.dirt);
+    }
+  return y;
+}
+
+/**
+ * 村庄出入口：从广场沿直线修一条直到地图边缘的「门洞大道」。
+ * rimShape 会在村外堆一圈最高 +16 格的环形山（坡度约 1.4，跳不上去），
+ * 没有这条路，村子就是一座监狱——玩家既出不去，也可能从山脊缺口掉出世界。
+ * 做法：把沿途地形整平到统一路面高度、清出头顶空间、路面填实，并沿路点灯。
+ */
+function gateRoad(w: World, x0: number, z0: number, x1: number, z1: number, roadY: number, half = 1): void {
+  const steps = Math.max(Math.abs(x1 - x0), Math.abs(z1 - z0));
+  for (let i = 0; i <= steps; i++) {
+    const t = steps === 0 ? 0 : i / steps;
+    const cx = Math.round(x0 + (x1 - x0) * t);
+    const cz = Math.round(z0 + (z1 - z0) * t);
+    for (let ox = -half; ox <= half; ox++) {
+      for (let oz = -half; oz <= half; oz++) {
+        const x = cx + ox;
+        const z = cz + oz;
+        if (x < 1 || z < 1 || x >= w.sx - 1 || z >= w.sz - 1) continue;
+        // 头顶清空 5 格，管它是山体还是树
+        for (let y = roadY; y < roadY + 5; y++) w.putFast(x, y, z, 0);
+        // 路面：中线铺石砖，两侧碎石
+        w.putFast(x, roadY - 1, z, ox === 0 && oz === 0 ? blocks.stoneBrick : blocks.gravel);
+        // 路面下方填实，避免整平后留下悬空深坑
+        for (let y = roadY - 2; y >= 1 && y >= roadY - 7; y--) {
+          if (w.get(x, y, z) === 0) w.putFast(x, y, z, blocks.stoneBrick);
+        }
+      }
+    }
+    // 沿路点灯：每 8 格一盏，灯柱立在路面右侧
+    if (i % 8 === 5) {
+      const lx = cx + half + 1;
+      const lz = cz;
+      if (lx < w.sx - 1 && lz < w.sz - 1) {
+        for (let y = roadY - 1; y <= roadY + 3; y++) w.putFast(lx, y, lz, 0);
+        w.putFast(lx, roadY - 1, lz, blocks.plank);
+        w.putFast(lx, roadY + 3, lz, blocks.lamp);
+      }
+    }
+  }
+}
+
 /** 一圈矮栅栏（牧场、菜地都用它） */
 function fenceRing(w: World, x0: number, z0: number, x1: number, z1: number, id = blocks.wood): void {
   for (let x = x0; x <= x1; x++)
@@ -297,18 +386,24 @@ export const SCENES: SceneDef[] = [
         else if (r < 0.94) w.putFast(x, g, z, blocks.flowerPink);
         else w.putFast(x, g, z, blocks.flowerWhite);
       });
-      pathLine(w, 64, 64, 64, 90, blocks.gravel);
-      pathLine(w, 64, 64, 36, 64, blocks.gravel);
-      pathLine(w, 64, 64, 92, 64, blocks.gravel);
-      // 传送座
-      for (const p of [{ x: 40, z: 64 }, { x: 88, z: 64 }, { x: 64, z: 40 }]) {
-        const g = groundAt(w, p.x, p.z);
-        platform(w, p.x, p.z, 2, g - 1, blocks.portal);
-        column(w, p.x, p.z, g, g + 1, blocks.portal);
+      // ── 出村大道：四条路穿过村外那圈 16 格高的环形山，各通向一个传送座 ──
+      // 没有这几条路，村外环山就是一座翻不出去的监狱（坡度约 1.4，跳跃上不去）
+      const roadY = groundAt(w, 64, 64);
+      gateRoad(w, 64, 64, 64, w.sz - 4, roadY); // 南 → 演示台方向
+      gateRoad(w, 64, 64, 4, 64, roadY); // 西 → 去生机森林
+      gateRoad(w, 64, 64, w.sx - 4, 64, roadY); // 东 → 去流浪河流
+      gateRoad(w, 64, 64, 64, 4, roadY); // 北 → 去水晶洞窟
+      // 传送座：发光平台 + 传送柱，踩上去按 E 就走（main.ts 还会在正上方打一道光柱）
+      for (const p of [
+        { x: 40, z: 64 },
+        { x: 88, z: 64 },
+        { x: 64, z: 40 },
+      ]) {
+        platform(w, p.x, p.z, 2, roadY - 1, blocks.portal);
+        column(w, p.x, p.z, roadY, roadY + 1, blocks.portal);
       }
-      const gp = groundAt(w, 64, 74);
-      platform(w, 64, 74, 2, gp - 1, blocks.woolGreen);
-      w.putFast(64, gp, 74, blocks.board);
+      platform(w, 64, 74, 2, roadY - 1, blocks.woolGreen);
+      w.putFast(64, roadY, 74, blocks.board);
     },
   },
 
@@ -380,11 +475,12 @@ export const SCENES: SceneDef[] = [
         if (g > 12 && Math.random() < 0.5) w.putFast(x, g, z, Math.random() < 0.5 ? blocks.mushroom : blocks.flowerYellow);
       });
       // 演示台
-      const gp = groundAt(w, 64, 76);
+      const gp = padPlaza(w, 64, 76);
       platform(w, 64, 76, 2, gp - 1, blocks.woolGreen);
-      const p1 = groundAt(w, 40, 96);
+      // 传送座：padPlaza 会把架在树冠上的台子拉回真实地面，并清出可走的小空地
+      const p1 = padPlaza(w, 40, 96);
       platform(w, 40, 96, 2, p1 - 1, blocks.portal);
-      const p2 = groundAt(w, 92, 96);
+      const p2 = padPlaza(w, 92, 96);
       platform(w, 92, 96, 2, p2 - 1, blocks.portal);
     },
   },
@@ -477,6 +573,13 @@ export const SCENES: SceneDef[] = [
         const g = groundAt(w, x, z);
         if (g > 15) tree(w, x, z, 4);
       });
+      // 木栈桥：把河中的演示台和码头连起来——否则演示台孤悬河面，谁也踩不上去
+      for (let x = 54; x <= 66; x++) {
+        for (let z = 69; z <= 71; z++) {
+          for (let y = 15; y <= 19; y++) w.putFast(x, y, z, 0);
+          w.putFast(x, 14, z, blocks.plank);
+        }
+      }
       const gp = groundAt(w, 64, 70);
       platform(w, 64, 70, 2, gp - 1, blocks.woolBlue);
       w.putFast(64, gp, 70, blocks.board);
@@ -721,7 +824,7 @@ export const SCENES: SceneDef[] = [
     ],
     pads: [
       { x: 50, z: 92, label: '⚡ Light up a bulb', demo: 'circuit' },
-      { x: 66, z: 92, label: '🌈 Splitting light', demo: 'rainbow' },
+      { x: 66, z: 95, label: '🌈 Splitting light', demo: 'rainbow' },
       { x: 82, z: 92, label: '🔧 Does a lever save effort?', demo: 'lever' },
       { x: 40, z: 96, label: '🗺️ Back to Village', goto: 'village' },
       { x: 88, z: 96, label: '🗺️ To: Starry Observatory', goto: 'observatory' },
@@ -784,10 +887,10 @@ export const SCENES: SceneDef[] = [
           if (Math.abs(j - 6) < 6 - rising * 0.4) w.putFast(x, y, 92, blocks.quartz);
         }
       }
-      // 演示台
+      // 演示台（彩虹台在弧前的地面上，不在弧顶——弧顶 14 格高，走不上去）
       const put = (x: number, z: number, id: number) => platform(w, x, z, 2, groundAt(w, x, z) - 1, id);
       put(50, 92, blocks.woolBlue);
-      put(66, 92, blocks.woolRed);
+      put(66, 95, blocks.woolRed);
       put(82, 92, blocks.woolYellow);
       put(40, 96, blocks.portal);
       put(88, 96, blocks.portal);

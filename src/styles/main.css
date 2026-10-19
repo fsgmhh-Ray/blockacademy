@@ -374,6 +374,7 @@ input:focus {
   flex-direction: column;
   pointer-events: auto;
   overflow: hidden;
+  z-index: 36; /* 压在触控层(5)之上，防止手机上面板被摇杆/视角区盖住 */
 }
 
 #dialog.show {
@@ -904,12 +905,74 @@ input:focus {
 }
 #cmd-input {
   flex: 1;
+  min-width: 0;
   background: transparent;
   border: none;
   outline: none;
   color: #eaf2ff;
   font-size: 14px;
   font-family: inherit;
+}
+#cmd-send {
+  padding: 6px 14px;
+  font-size: 13px;
+  border-radius: 8px;
+  border: 1px solid rgba(120, 170, 230, 0.45);
+  background: rgba(80, 140, 220, 0.25);
+  color: #dcecff;
+  cursor: pointer;
+  white-space: nowrap;
+}
+#cmd-send:hover {
+  background: rgba(80, 160, 255, 0.4);
+}
+#cmd-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+#cmd-head .cmd-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: #9fd0ff;
+}
+#cmd-head .cmd-tip {
+  flex: 1;
+  font-size: 11px;
+  color: #7f8ea8;
+}
+#cmd-head .cmd-tip kbd {
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  border-radius: 4px;
+  padding: 0 4px;
+  font-size: 10px;
+}
+#cmd-close {
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 138, 138, 0.45);
+  background: rgba(120, 40, 40, 0.35);
+  color: #ffb4b4;
+  font-size: 13px;
+  line-height: 1;
+  cursor: pointer;
+}
+#cmd-close:hover {
+  background: rgba(200, 60, 60, 0.55);
+  color: #fff;
+}
+/* 手机模式：命令台挪到上半屏，软键盘弹起来也不会挡住 */
+body.touch-mode #cmd-console {
+  bottom: auto;
+  top: 10vh;
+}
+body.touch-mode #cmd-input {
+  font-size: 16px; /* iOS 聚焦时小于 16px 会自动放大页面 */
+}
+body.touch-mode #cmd-log {
+  max-height: 26vh;
 }
 
 /* ───────── /title 大字横幅 ───────── */
@@ -1567,4 +1630,19 @@ body.touch-mode .sheet {
 /* 触屏时快捷栏要盖在触控层之上，否则点不到 */
 body.touch-mode #hotbar {
   z-index: 7;
+}
+
+/* 手机模式：对话面板拉通、限高，软键盘弹起来输入行也不会被挡住 */
+body.touch-mode #dialog {
+  right: 8px;
+  left: 8px;
+  top: 8px;
+  width: auto;
+  max-height: 52vh;
+}
+body.touch-mode #ask-input {
+  font-size: 16px; /* iOS 聚焦时小于 16px 会自动放大页面 */
+}
+body.touch-mode #ask-row {
+  flex-wrap: wrap;
 }

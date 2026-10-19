@@ -357,6 +357,7 @@ class Game {
     }
 
     this.pads = scene.pads;
+    this.renderPadBeacons();
     const spawnY = scene.groundY ?? this.world.groundY(scene.spawn[0], scene.spawn[1]);
     this.player.teleport(scene.spawn[0] + 0.5, spawnY + 0.6, scene.spawn[1] + 0.5);
     this.player.velocity.set(0, 0, 0);
@@ -365,6 +366,69 @@ class Game {
     this.ui.setScene(scene, this.doneScenes.size);
     this.ui.renderQuests(scene.id, this.progress);
     if (!silent) this.ui.toast(`${scene.icon} ${scene.name} · ${scene.subtitle}`, 'info', 4200);
+    // 新手最常见的卡点：在村里转半天找不到出口。传送台现在都有光柱信标，这里再口头点一句。
+    if (scene.id === 'village') {
+      setTimeout(
+        () => this.ui.toast('💡 跟着彩色光柱走，踩上发光传送台就能出村（按 M 直接看地图）', 'info', 6500),
+        600,
+      );
+    }
+  }
+
+  // ───────── 传送台信标：光柱 + 浮动图标，让出口在村口就看得见 ─────────
+  private padBeacons: THREE.Group | null = null;
+
+  private renderPadBeacons(): void {
+    this.clearPadBeacons();
+    if (!this.pads.length) return;
+    const g = new THREE.Group();
+    for (const pad of this.pads) {
+      const y = (pad.y ?? this.world.groundY(pad.x, pad.z)) + 0.5;
+      const isDemo = !!pad.demo;
+      const color = isDemo ? 0x8be9ff : 0xffd27a;
+      // 直达天际的柔光柱（像 MC 的信标），穿透雾气与地形
+      const beam = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.14, 0.22, 60, 10, 1, true),
+        new THREE.MeshBasicMaterial({
+          color,
+          transparent: true,
+          opacity: 0.22,
+          depthWrite: false,
+          side: THREE.DoubleSide,
+          fog: false,
+        }),
+      );
+      beam.position.set(pad.x + 0.5, y + 28, pad.z + 0.5);
+      beam.renderOrder = 2;
+      g.add(beam);
+      // 头顶浮动图标（emoji 画进 canvas 当贴图）
+      const icon = new THREE.Sprite(
+        new THREE.SpriteMaterial({
+          map: padIconTexture(pad.label),
+          transparent: true,
+          depthTest: false,
+          fog: false,
+        }),
+      );
+      icon.position.set(pad.x + 0.5, y + 2.9, pad.z + 0.5);
+      icon.scale.set(1.5, 1.5, 1);
+      icon.renderOrder = 3;
+      g.add(icon);
+    }
+    this.padBeacons = g;
+    this.scene.add(g);
+  }
+
+  private clearPadBeacons(): void {
+    if (!this.padBeacons) return;
+    this.scene.remove(this.padBeacons);
+    this.padBeacons.traverse((o) => {
+      const m = o as THREE.Mesh;
+      m.geometry?.dispose?.();
+      const mat = m.material as THREE.Material | undefined;
+      mat?.dispose?.();
+    });
+    this.padBeacons = null;
   }
 
   private applyEnvironment(scene: SceneDef): void {
@@ -1486,6 +1550,18 @@ class Game {
         this.toggleInventory();
         break;
       case 'chat':
+        // 💬 = 互动：身边有 NPC 就聊天，有传送台就传送，否则退回命令台
+        if (this.nearestNpc()) this.openDialog(this.nearestNpc()!);
+        else if (this.nearPad) {
+          const p = this.nearPad;
+          if (p.demo) this.playDemo(p.demo);
+          else if (p.goto) this.gotoScene(p.goto);
+        } else {
+          this.openConsole();
+          this.ui.toast('身边没有 NPC，先打开了命令台（/help）', 'info', 2600);
+        }
+        break;
+      case 'cmd':
         this.openConsole();
         break;
       case 'menu':
@@ -1922,6 +1998,16 @@ class Game {
 
     const frozen =
       this.mode !== 'play' || this.consoleOpen || this.ui.anyOverlayOpen() || !this.input.locked;
+
+    // 触屏层：只要有界面开着（命令台/物品栏/菜单/对话框）就整体关掉，
+    // 否则摇杆和视角区会盖在界面上，打字时蹭一下就乱转视角。
+    const wantTouch =
+      this.edition === 'bedrock' &&
+      this.mode === 'play' &&
+      !this.consoleOpen &&
+      !this.ui.anyOverlayOpen() &&
+      !this.ui.isConsoleOpen();
+    if (wantTouch !== this.touch.enabled) this.touch.setEnabled(wantTouch);
     this.player.update(dt, this.input, this.world, frozen);
     this.player.applyCamera(this.camera);
     this.playerLight.position.copy(this.camera.position);
@@ -1974,7 +2060,11 @@ class Game {
 
   private handleKeys(): void {
     const i = this.input;
-    if (this.consoleOpen) return;
+    // 命令台开着时：输入框自己处理打字；焦点移出后按 T / ESC 也能关
+    if (this.consoleOpen) {
+      if (i.pressed('KeyT') || i.pressed('Escape')) this.closeConsole();
+      return;
+    }
     if (this.mode === 'play' && this.input.locked && (i.pressed('KeyT') || i.pressed('Slash'))) {
       this.openConsole();
       return;
@@ -2078,6 +2168,34 @@ class Game {
   private padCooldownTick(): void {
     if (this.padCooldown > 0) this.padCooldown--;
   }
+}
+
+/** 信标浮动图标：把 label 里的 emoji 画进一张canvas，做成 sprite 贴图（按 label 缓存） */
+const padIconCache = new Map<string, THREE.CanvasTexture>();
+function padIconTexture(label: string): THREE.CanvasTexture {
+  const cached = padIconCache.get(label);
+  if (cached) return cached;
+  const cv = document.createElement('canvas');
+  cv.width = 128;
+  cv.height = 128;
+  const ctx = cv.getContext('2d')!;
+  // 深色圆底，保证任何天空背景下都看得清
+  ctx.beginPath();
+  ctx.arc(64, 64, 58, 0, Math.PI * 2);
+  ctx.fillStyle = 'rgba(10, 16, 28, 0.72)';
+  ctx.fill();
+  ctx.lineWidth = 5;
+  ctx.strokeStyle = 'rgba(255, 255, 255, 0.85)';
+  ctx.stroke();
+  const emoji = (label.match(/^\S+/) ?? ['🗺️'])[0];
+  ctx.font = '72px system-ui, "Segoe UI Emoji", "Apple Color Emoji", sans-serif';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(emoji, 64, 68);
+  const tex = new THREE.CanvasTexture(cv);
+  tex.needsUpdate = true;
+  padIconCache.set(label, tex);
+  return tex;
 }
 
 const canvas = document.getElementById('game-canvas') as HTMLCanvasElement;

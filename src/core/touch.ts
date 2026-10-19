@@ -14,6 +14,7 @@ export type TouchAction =
   | 'fart'
   | 'inventory'
   | 'chat'
+  | 'cmd'
   | 'menu';
 
 const HOLD = new Set<TouchAction>(['jump', 'sneak', 'break', 'place']);
@@ -51,6 +52,7 @@ export class TouchControls {
         <button class="tbtn round" data-a="menu" type="button">☰</button>
         <button class="tbtn round" data-a="inventory" type="button">🎒</button>
         <button class="tbtn round" data-a="chat" type="button">💬</button>
+        <button class="tbtn round" data-a="cmd" type="button">⌘</button>
       </div>
       <div id="touch-btns">
         <button class="tbtn" data-a="jump" type="button">⬆</button>

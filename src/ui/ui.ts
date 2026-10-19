@@ -189,6 +189,16 @@ export class UI {
     });
     this.cmdInput.addEventListener('keyup', (e) => e.stopPropagation());
 
+    // ✕ 关闭 / 发送按钮（手机上没有 ESC 键，必须给可点的按钮）
+    (q('cmd-close') as HTMLButtonElement).onclick = () => this.hooks.onConsoleClose();
+    (q('cmd-send') as HTMLButtonElement).onclick = () => this.submitCommand();
+    // 焦点不在输入框时（比如点了日志区），按 ESC 也要能关
+    document.addEventListener('keydown', (e) => {
+      if (e.key !== 'Escape' || !this.isConsoleOpen()) return;
+      if (document.activeElement === this.cmdInput) return; // 输入框自己会处理
+      this.hooks.onConsoleClose();
+    });
+
     // 物品栏：一个事件委托搞定所有格子
     this.el['overlay-inventory'].addEventListener('click', (e) => {
       const el = (e.target as HTMLElement).closest('.inv-slot') as HTMLElement | null;
@@ -267,8 +277,12 @@ export class UI {
   openConsole(): void {
     this.el['cmd-console'].classList.add('show');
     this.cmdLog.innerHTML = '';
-    this.consolePrint('Command console — type /help for a list of commands.', 'sys');
-    setTimeout(() => this.cmdInput.focus(), 30);
+    this.consolePrint('命令台已打开：输入 /help 查看全部指令。', 'sys');
+    this.consolePrint('关闭：按 ESC，或点右上角 ✕。', 'sys');
+    // 同步 focus（手机端必须在点击手势内调用，软键盘才会弹出来）；
+    // 键鼠路径不是手势上下文，补一个延迟重试。
+    this.cmdInput.focus({ preventScroll: true });
+    setTimeout(() => this.cmdInput.focus({ preventScroll: true }), 60);
   }
 
   closeConsole(): void {
@@ -328,7 +342,9 @@ export class UI {
     this.el['chat'].innerHTML = '';
     this.lastBubble = null;
     this.renderChips(npcId);
-    setTimeout(() => this.askInput.focus(), 60);
+    // 同步 focus：手机端只有在点击手势内调用，软键盘才会弹出来；延迟那次只是兜底
+    this.askInput.focus({ preventScroll: true });
+    setTimeout(() => this.askInput.focus({ preventScroll: true }), 60);
   }
 
   closeDialog(): void {
@@ -1109,7 +1125,10 @@ const TEMPLATE = `
     <div class="grid">
       <div class="card"><div class="ic">⌨️</div><b>Move</b><small>W A S D to walk, Shift to sprint, Space to jump, F to toggle flight</small></div>
       <div class="card"><div class="ic">🖱️</div><b>Look &amp; Act</b><small>Mouse to look, left-click to mine, right-click to place, wheel/number keys to switch blocks</small></div>
+      <div class="card"><div class="ic">⌨️</div><b>Touch (BEDROCK)</b><small>Left joystick to walk, drag anywhere to look. Buttons: ⬆ jump · ⛏ mine · 🧱 place · 🪶 fly · ⬇ sneak · 💨 fart · 🎒 bag · 💬 talk (stands next to an NPC) · ⌘ commands · ☰ menu</small></div>
       <div class="card"><div class="ic">💬</div><b>Talk to NPCs</b><small>Walk up and press E to chat, ESC to close; type any science question</small></div>
+      <div class="card"><div class="ic">⌘</div><b>Command Console</b><small>Press <kbd>T</kbd> or <kbd>/</kbd> to open. Type a command and press <kbd>Enter</kbd> (or tap 发送). <b>Close it with <kbd>ESC</kbd> or the ✕ button</b> — on touch, use the ⌘ button to open and ✕ to close.</small></div>
+      <div class="card"><div class="ic">🚪</div><b>Finding the Way Out</b><small>Every teleport pad shoots a tall beam of light with a floating icon — follow the beams. In Dawnlight Village four lit roads lead out through the mountain ring to the pads. Press <kbd>M</kbd> for the map to travel directly.</small></div>
       <div class="card"><div class="ic">🎬</div><b>3D Demo</b><small>Step onto a glowing demo pad and press E for a narrated animation</small></div>
       <div class="card"><div class="ic">🗺️</div><b>Change Scene</b><small>Press M for the map to teleport, or step on a teleport pad</small></div>
       <div class="card"><div class="ic">🎯</div><b>Quests</b><small>Talking, watching demos, and building all advance quests; finish to earn badges</small></div>
@@ -1120,7 +1139,7 @@ const TEMPLATE = `
       <div class="card"><div class="ic">💨</div><b>Fart</b><small>Press <kbd>G</kbd> (or the 💨 button) to let one rip. It even scares the animals.</small></div>
       <div class="card"><div class="ic">👥</div><b>Players</b><small>Press <kbd>P</kbd> to switch player — each keeps their own AI settings, voice, bag, progress and chat log</small></div>
       <div class="card"><div class="ic">📱</div><b>Editions</b><small>Pick <b>JAVA EDITION</b> for keyboard &amp; mouse (with the <kbd>F3</kbd> debug screen), or <b>BEDROCK EDITION</b> for touch controls with a virtual joystick</small></div>
-      <div class="card"><div class="ic">⌘</div><b>Minecraft-style commands</b><small>Press <kbd>T</kbd> or <kbd>/</kbd>. Move <code>/tp /teleport /locate /fly</code> · Build <code>/setblock /fill /clone /give /clear</code> · World <code>/gamemode /time /weather /cycle</code> · Chat <code>/say /me /title /tellraw /stopsound</code> · Info <code>/list /seed /summon /mobs /pets</code> · Life <code>/kill /spawnpoint /heal /feed</code>. Coordinates support <code>~</code>. Type <code>/help</code> for all.</small></div>
+      <div class="card"><div class="ic">⌘</div><b>Minecraft-style commands</b><small>Press <kbd>T</kbd> or <kbd>/</kbd>. Move <code>/tp /teleport /locate /fly</code> · Build <code>/setblock /fill /clone /give /clear</code> · World <code>/gamemode /time /weather /cycle</code> · Chat <code>/say /me /title /tellraw /stopsound</code> · Info <code>/list /seed /summon /mobs /pets</code> · Life <code>/kill /spawnpoint /heal /feed</code>. Coordinates support <code>~</code>. Type <code>/help</code> for all. Close the console with <kbd>ESC</kbd> or ✕.</small></div>
     </div>
     <div class="row" style="justify-content:flex-end;margin-top:18px">
       <button id="btn-help-close" class="ghost">Close (H)</button>
@@ -1177,10 +1196,16 @@ const TEMPLATE = `
 </div>
 
 <div id="cmd-console">
+  <div id="cmd-head">
+    <span class="cmd-title">⌘ 命令台</span>
+    <span class="cmd-tip">回车发送 · <kbd>ESC</kbd> 或点 ✕ 关闭</span>
+    <button id="cmd-close" type="button" title="关闭命令台 (ESC)">✕</button>
+  </div>
   <div id="cmd-log"></div>
   <div id="cmd-row">
     <span class="prompt">/</span>
-    <input id="cmd-input" placeholder="Type a command…  (try /help)" autocomplete="off" spellcheck="false" />
+    <input id="cmd-input" placeholder="输入命令…（/help 查看全部指令）" autocomplete="off" autocapitalize="off" spellcheck="false" enterkeyhint="send" />
+    <button id="cmd-send" type="button">发送</button>
   </div>
 </div>
 `;

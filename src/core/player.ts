@@ -135,6 +135,25 @@ export class Player {
       this.velocity.set(0, 0, 0);
     }
 
+    // 世界边缘是一圈「隐形墙」：地图之外没有方块数据（读取视为空气），
+    // 不钳制的话玩家会直接走出地图掉进无尽虚空。所有场景共用。
+    const limX = world.sx - 0.62;
+    const limZ = world.sz - 0.62;
+    if (this.position.x < 0.62) {
+      this.position.x = 0.62;
+      this.velocity.x = 0;
+    } else if (this.position.x > limX) {
+      this.position.x = limX;
+      this.velocity.x = 0;
+    }
+    if (this.position.z < 0.62) {
+      this.position.z = 0.62;
+      this.velocity.z = 0;
+    } else if (this.position.z > limZ) {
+      this.position.z = limZ;
+      this.velocity.z = 0;
+    }
+
     if (this.onGround && len > 0 && !this.fly) {
       this.bob += dt * (sprinting ? 13 : 9);
     } else {

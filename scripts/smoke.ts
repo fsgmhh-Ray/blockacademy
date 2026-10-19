@@ -3,7 +3,7 @@
  * 用法：npm run smoke
  */
 import { buildChunkMesh } from '../src/core/mesher';
-import { blockDef, BLOCK_LIST } from '../src/core/blockRegistry';
+import { blockDef, BLOCK_LIST, isSolid } from '../src/core/blockRegistry';
 import { hasTile, GRID, ATLAS_TILES } from '../src/core/textures';
 import { SCENES } from '../src/world/scenes';
 import { Inventory } from '../src/craft/inventory';
@@ -141,6 +141,68 @@ for (const scene of SCENES) {
     console.log(`  网格采样(chunk ${cx},${cz}): ${verts} 顶点 / ${tris} 三角形 / 索引上限 ${maxIdx}`);
   }
   console.log('');
+}
+
+// 传送台可达性自检：从出生点做 BFS，确认每个传送台/演示台都走得近、踩得上。
+// （历史上多次出现台子被架到树冠/屋顶/水面上，玩家在村里转到崩溃也出不去）
+console.log('【传送台可达性】');
+{
+  let unreachable = 0;
+  for (const scene of SCENES) {
+    const w = new FakeWorld();
+    scene.build(w);
+    const solidAt = (x: number, y: number, z: number) => isSolid(w.get(x, y, z));
+    const standable = (x: number, y: number, z: number) =>
+      w.inBounds(x, y - 1, z) && !solidAt(x, y, z) && !solidAt(x, y + 1, z) && solidAt(x, y - 1, z);
+    const key = (x: number, y: number, z: number) => `${x},${y},${z}`;
+    // 有顶场景（洞窟）必须用场景显式地面高度，不能用地表扫描（会扫到天花板）
+    const start = {
+      x: scene.spawn[0],
+      z: scene.spawn[1],
+      y: scene.groundY ?? w.groundY(scene.spawn[0], scene.spawn[1]),
+    };
+    const seen = new Set<string>([key(start.x, start.y, start.z)]);
+    const queue = [start];
+    let head = 0;
+    while (head < queue.length) {
+      const c = queue[head++];
+      for (const [dx, dz] of [
+        [1, 0],
+        [-1, 0],
+        [0, 1],
+        [0, -1],
+      ] as [number, number][]) {
+        const nx = c.x + dx;
+        const nz = c.z + dz;
+        for (let dy = -10; dy <= 1; dy++) {
+          const ny = c.y + dy;
+          if (ny < 2 || ny >= w.sy - 2) continue;
+          if (standable(nx, ny, nz) && !seen.has(key(nx, ny, nz))) {
+            seen.add(key(nx, ny, nz));
+            queue.push({ x: nx, y: ny, z: nz });
+          }
+        }
+      }
+    }
+    const bad: string[] = [];
+    for (const p of scene.pads) {
+      const padY = p.y ?? w.groundY(p.x, p.z);
+      const ok = [...seen].some((k) => {
+        const [x, y, z] = k.split(',').map(Number);
+        return Math.abs(x - p.x) <= 2 && Math.abs(z - p.z) <= 2 && Math.abs(y - padY) < 3;
+      });
+      if (!ok) {
+        bad.push(`(${p.x},${p.z}) ${p.label}`);
+        unreachable++;
+      }
+    }
+    check(
+      bad.length === 0,
+      bad.length ? `${scene.name}: ${bad.length} 个传送台走不到 → ${bad.join(' / ')}` : '',
+    );
+    console.log(`  ${scene.name}: ${scene.pads.length} 个传送台全部可达（可站立区域 ${seen.size} 格）`);
+  }
+  check(unreachable === 0, `共 ${unreachable} 个传送台不可达`);
 }
 
 // 合成与背包自检
