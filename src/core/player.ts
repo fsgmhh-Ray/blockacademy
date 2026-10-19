@@ -20,6 +20,8 @@ export class Player {
   pitch = 0;
   onGround = false;
   fly = false;
+  /** 旁观模式：穿过方块 */
+  noclip = false;
   inWater = false;
   /** 上一帧是否移动，用于 NPC 是否转头看你 */
   moving = false;
@@ -68,6 +70,24 @@ export class Player {
     const sprinting = input.down('ShiftLeft') || input.down('ShiftRight');
     let speed = this.fly ? FLY : this.inWater ? SWIM : sprinting && this.moving ? SPRINT : WALK;
     if (frozen) speed = 0;
+
+    // 旁观模式：无重力、Space 上升 / Ctrl 下降、移动更快
+    if (this.noclip) {
+      const nsp = frozen ? 0 : sprinting ? FLY * 2.2 : FLY * 1.5;
+      let nvy = 0;
+      if (!frozen) {
+        if (input.down('Space')) nvy += 1;
+        if (input.down('ControlLeft') || input.down('KeyQ')) nvy -= 1;
+      }
+      this.velocity.set(wishX * nsp, nvy * FLY, wishZ * nsp);
+      this.move(world, this.velocity.x * dt, this.velocity.y * dt, this.velocity.z * dt);
+      if (this.position.y < -8) {
+        this.position.set(64, world.groundY(64, 64) + 2, 64);
+        this.velocity.set(0, 0, 0);
+      }
+      this.bob += dt * 1.5;
+      return;
+    }
 
     const accel = this.onGround || this.fly ? 42 : 14;
     this.velocity.x += (wishX * speed - this.velocity.x) * Math.min(1, accel * dt);
@@ -124,6 +144,13 @@ export class Player {
 
   /** 分轴推进 + 滑动 */
   private move(world: World, dx: number, dy: number, dz: number): void {
+    if (this.noclip) {
+      this.position.x += dx;
+      this.position.y += dy;
+      this.position.z += dz;
+      this.onGround = false;
+      return;
+    }
     if (dx !== 0) {
       const nx = this.position.x + dx;
       if (!this.collides(world, nx, this.position.y, this.position.z)) this.position.x = nx;

@@ -55,6 +55,7 @@ export class UI {
   private selAvatar = '🧑‍🚀';
   private selColor = '#5ad1c9';
   private playerMeta: ProfileMeta | null = null;
+  private titleTimer = 0;
 
   constructor(
     private root: HTMLElement,
@@ -69,6 +70,7 @@ export class UI {
     q('crosshair');
     q('topbar');
     q('hint');
+    q('cmd-title');
     q('hotbar');
     q('dialog');
     q('chat');
@@ -149,6 +151,18 @@ export class UI {
     d.textContent = msg;
     this.el['toast'].appendChild(d);
     setTimeout(() => d.remove(), ms);
+  }
+
+  /** /title 用的居中大字横幅 */
+  bigTitle(text: string): void {
+    const el = this.el['cmd-title'];
+    if (!el) return;
+    el.textContent = text;
+    el.classList.remove('show');
+    void el.offsetWidth; // restart the animation
+    el.classList.add('show');
+    clearTimeout(this.titleTimer);
+    this.titleTimer = window.setTimeout(() => el.classList.remove('show'), 2800);
   }
 
   setScene(scene: SceneDef, badges: number): void {
@@ -588,6 +602,8 @@ const TEMPLATE = `
 
 <div id="topbar" class="panel"></div>
 
+<div id="cmd-title"></div>
+
 <div id="toast"></div>
 
 <div id="hint"></div>
@@ -718,7 +734,8 @@ const TEMPLATE = `
       <div class="card"><div class="ic">🎬</div><b>3D Demo</b><small>Step onto a glowing demo pad and press E for a narrated animation</small></div>
       <div class="card"><div class="ic">🗺️</div><b>Change Scene</b><small>Press M for the map to teleport, or step on a teleport pad</small></div>
       <div class="card"><div class="ic">🎯</div><b>Quests</b><small>Talking, watching demos, and building all advance quests; finish to earn badges</small></div>
-      <div class="card"><div class="ic">⌘</div><b>Commands</b><small>Press <kbd>T</kbd> or <kbd>/</kbd> to open the console. Try <code>/help</code>, <code>/tp</code>, <code>/give</code>, <code>/fly</code>, <code>/time</code>, <code>/weather</code></small></div>
+      <div class="card"><div class="ic">👥</div><b>Players</b><small>Press <kbd>P</kbd> to switch player — each keeps their own AI settings, voice and progress</small></div>
+      <div class="card"><div class="ic">⌘</div><b>Minecraft-style commands</b><small>Press <kbd>T</kbd> or <kbd>/</kbd>. Move <code>/tp /teleport /locate /fly</code> · Build <code>/setblock /fill /clone /give /clear</code> · World <code>/gamemode /time /weather</code> · Chat <code>/say /me /title /tellraw /stopsound</code> · Info <code>/list /seed /summon</code> · Life <code>/kill /spawnpoint</code>. Coordinates support <code>~</code>. Type <code>/help</code> for all.</small></div>
     </div>
     <div class="row" style="justify-content:flex-end;margin-top:18px">
       <button id="btn-help-close" class="ghost">Close (H)</button>
@@ -751,7 +768,7 @@ const TEMPLATE = `
     </div>
     <div class="keys">
       <kbd>W A S D</kbd> Move · <kbd>Space</kbd> Jump · <kbd>F</kbd> Fly · <kbd>L-click</kbd> Mine · <kbd>R-click</kbd> Place<br />
-      <kbd>E</kbd> Talk / Trigger Demo · <kbd>M</kbd> Map · <kbd>O</kbd> Settings · <kbd>H</kbd> Help · <kbd>T</kbd> Commands · <kbd>ESC</kbd> Release Mouse
+      <kbd>E</kbd> Talk / Trigger Demo · <kbd>M</kbd> Map · <kbd>O</kbd> Settings · <kbd>P</kbd> Players · <kbd>H</kbd> Help · <kbd>T</kbd> Commands · <kbd>ESC</kbd> Release Mouse
     </div>
   </div>
 </div>

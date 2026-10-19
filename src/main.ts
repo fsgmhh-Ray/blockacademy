@@ -7,7 +7,7 @@ import { blockDef, BLOCK_LIST } from './core/blockRegistry';
 import { blocks, HOTBAR as HOTBAR_DEF, BLOCK_NAMES } from './world/blockIds';
 import { SCENES, SCENE_BY_ID, type SceneDef, type Pad } from './world/scenes';
 import { NPCActor, stopSpeaking } from './npc/npcActor';
-import { BY_ID } from './npc/personalities';
+import { BY_ID, PERSONALITIES } from './npc/personalities';
 import { loadLLMConfig, saveLLMConfig, type LLMConfig, type SceneContext } from './npc/brain';
 import { UI, type HotbarItem } from './ui/ui';
 import { ShowcasePlayer } from './ui/showcase';
@@ -56,6 +56,11 @@ class Game {
   llm: LLMConfig = loadLLMConfig();
   userMeta: ProfileMeta = getActiveState().meta;
   hotbarIndex = 0;
+
+  /** 《我的世界》风格游戏模式：survival 生存 / creative 创造 / adventure 冒险 / spectator 旁观 */
+  gameMode: 'survival' | 'creative' | 'adventure' | 'spectator' = 'creative';
+  /** /spawnpoint 设定的重生点（绝对坐标），null = 用场景默认出生点 */
+  spawnPoint: THREE.Vector3 | null = null;
 
   mode: 'title' | 'play' | 'dialog' | 'showcase' | 'overlay' = 'title';
   activeNpc: NPCActor | null = null;
@@ -574,18 +579,43 @@ class Game {
       const n = Number(s);
       return Number.isFinite(n) ? n : null;
     };
+    const p = this.player.position;
+    /** MC 风格相对坐标：~ = 当前位置，~5 = 偏移 +5 */
+    const cd = (s: string | undefined, base: number): number | null => {
+      if (s === undefined) return null;
+      if (s.startsWith('~')) {
+        const rest = s.slice(1);
+        if (rest === '') return base;
+        const n = Number(rest);
+        return Number.isFinite(n) ? base + n : null;
+      }
+      const n = Number(s);
+      return Number.isFinite(n) ? n : null;
+    };
+    const bx = Math.floor(p.x);
+    const by = Math.floor(p.y);
+    const bz = Math.floor(p.z);
+    const MAXVOL = 200_000;
 
     switch (cmd) {
       case 'help':
-        out('Commands: /help /tp /give /setblock /fill /fly /locate /list /seed /say /time /weather /day /night', 'sys');
-        out('Examples:  /tp cave   /tp 64 30 64   /give stone   /setblock 64 30 64 lamp   /fill 60 20 60 66 24 66 brick', 'sys');
+        out('【Move】    /tp (/teleport) <x y z> | <scene> | ~ ~10 ~      /locate      /fly', 'sys');
+        out('【Build】   /setblock <x y z> <block>     /fill <region> <block> [replace <blk>]', 'sys');
+        out('           /clone <region> <tx ty tz>    /give <block> [count]    /clear', 'sys');
+        out('【World】   /gamemode <survival|creative|adventure|spectator> (or 0/1/2/3)', 'sys');
+        out('           /time day|night|noon|sunrise|sunset|set <0-100>|add <0-100>   /weather clear|rain|thunder', 'sys');
+        out('【Chat】    /say <text>   /me <text>   /title <text>   /tellraw <text>   /stopsound', 'sys');
+        out('【Info】    /list [scenes|npcs|players|blocks]   /seed      /summon <npc>', 'sys');
+        out('【Life】    /kill (respawn)   /spawnpoint [x y z]   /setworldspawn [x y z]', 'sys');
+        out('Coordinates support MC-style ~ : e.g. /tp ~ ~10 ~   /setblock ~ ~1 ~ lamp', 'sys');
         return;
-      case 'tp': {
+      case 'tp':
+      case 'teleport': {
         if (args.length >= 3) {
-          const x = num(args[0]);
-          const y = num(args[1]);
-          const z = num(args[2]);
-          if (x === null || y === null || z === null) return out('Usage: /tp <x> <y> <z>', 'err');
+          const x = cd(args[0], bx);
+          const y = cd(args[1], by);
+          const z = cd(args[2], bz);
+          if (x === null || y === null || z === null) return out('Usage: /tp <x> <y> <z>  (use ~ for relative)', 'err');
           this.player.teleport(x + 0.5, y + 0.6, z + 0.5);
           return out(`Teleported to (${x}, ${y}, ${z})`, 'ok');
         }
@@ -611,36 +641,168 @@ class Game {
         return out(`Gave you ${count} × ${blockDef(id).name}`, 'ok');
       }
       case 'setblock': {
-        const x = num(args[0]);
-        const y = num(args[1]);
-        const z = num(args[2]);
+        const x = cd(args[0], bx);
+        const y = cd(args[1], by);
+        const z = cd(args[2], bz);
         const id = this.blockFromName(args[3] ?? '');
         if (x === null || y === null || z === null || id === null) return out('Usage: /setblock <x> <y> <z> <block>', 'err');
         this.world.set(x, y, z, id);
         return out(`Set (${x}, ${y}, ${z}) to ${blockDef(id).name}`, 'ok');
       }
       case 'fill': {
-        const nums = args.slice(0, 6).map(num);
-        if (nums.some((n) => n === null)) return out('Usage: /fill <x1> <y1> <z1> <x2> <y2> <z2> <block>', 'err');
+        const nums = [cd(args[0], bx), cd(args[1], by), cd(args[2], bz), cd(args[3], bx), cd(args[4], by), cd(args[5], bz)];
+        if (nums.some((n) => n === null)) return out('Usage: /fill <x1> <y1> <z1> <x2> <y2> <z2> <block> [replace <target>]', 'err');
         const id = this.blockFromName(args[6] ?? '');
         if (id === null) return out(`Unknown block "${args[6]}"`, 'err');
         const [x0, y0, z0, x1, y1, z1] = nums as number[];
-        this.world.fill(
+        const [mx, my, mz, Mx, My, Mz] = [
           Math.min(x0, x1), Math.min(y0, y1), Math.min(z0, z1),
-          Math.max(x0, x1), Math.max(y0, y1), Math.max(z0, z1), id,
+          Math.max(x0, x1), Math.max(y0, y1), Math.max(z0, z1),
+        ];
+        const vol = (Mx - mx + 1) * (My - my + 1) * (Mz - mz + 1);
+        if (vol > MAXVOL) return out(`Region too large (${vol} blocks, max ${MAXVOL})`, 'err');
+        let n = 0;
+        if ((args[7] || '').toLowerCase() === 'replace') {
+          const only = this.blockFromName(args[8] ?? '');
+          if (only === null) return out('Usage: /fill ... <block> replace <target>', 'err');
+          for (let x = mx; x <= Mx; x++)
+            for (let y = my; y <= My; y++)
+              for (let z = mz; z <= Mz; z++)
+                if (this.world.get(x, y, z) === only) {
+                  this.world.set(x, y, z, id);
+                  n++;
+                }
+        } else {
+          this.world.fill(mx, my, mz, Mx, My, Mz, id);
+          n = vol;
+        }
+        return out(`Filled ${n} block(s) with ${blockDef(id).name}`, 'ok');
+      }
+      case 'clone': {
+        const nums = [cd(args[0], bx), cd(args[1], by), cd(args[2], bz), cd(args[3], bx), cd(args[4], by), cd(args[5], bz)];
+        const t = [cd(args[6], bx), cd(args[7], by), cd(args[8], bz)];
+        if (nums.some((n) => n === null) || t.some((n) => n === null))
+          return out('Usage: /clone <x1> <y1> <z1> <x2> <y2> <z2> <tx> <ty> <tz>', 'err');
+        const [x0, y0, z0, x1, y1, z1] = nums as number[];
+        const [mx, my, mz, Mx, My, Mz] = [
+          Math.min(x0, x1), Math.min(y0, y1), Math.min(z0, z1),
+          Math.max(x0, x1), Math.max(y0, y1), Math.max(z0, z1),
+        ];
+        const vol = (Mx - mx + 1) * (My - my + 1) * (Mz - mz + 1);
+        if (vol > MAXVOL) return out(`Region too large (${vol} blocks, max ${MAXVOL})`, 'err');
+        const [tx, ty, tz] = t as number[];
+        let n = 0;
+        for (let x = mx; x <= Mx; x++)
+          for (let y = my; y <= My; y++)
+            for (let z = mz; z <= Mz; z++) {
+              this.world.set(tx + (x - mx), ty + (y - my), tz + (z - mz), this.world.get(x, y, z));
+              n++;
+            }
+        return out(`Cloned ${n} block(s) to (${tx}, ${ty}, ${tz})`, 'ok');
+      }
+      case 'gamemode': {
+        const m = (args[0] || '').toLowerCase();
+        const map: Record<string, 'survival' | 'creative' | 'adventure' | 'spectator'> = {
+          survival: 'survival', s: 'survival', '0': 'survival',
+          creative: 'creative', c: 'creative', '1': 'creative',
+          adventure: 'adventure', a: 'adventure', '2': 'adventure',
+          spectator: 'spectator', sp: 'spectator', '3': 'spectator',
+        };
+        const target = map[m];
+        if (!target) return out('Usage: /gamemode <survival|creative|adventure|spectator>  (also 0/1/2/3, s/c/a/sp)', 'err');
+        return out(this.setGameMode(target), 'ok');
+      }
+      case 'kill': {
+        const sp = this.spawnPoint;
+        if (sp) this.player.teleport(sp.x, sp.y, sp.z);
+        else {
+          const s = this.sceneDef;
+          const y = s.groundY ?? this.world.groundY(s.spawn[0], s.spawn[1]);
+          this.player.teleport(s.spawn[0] + 0.5, y + 0.6, s.spawn[1] + 0.5);
+        }
+        this.player.velocity.set(0, 0, 0);
+        this.ui.toast('💀 Respawned at the spawn point', 'info');
+        return out('Respawned at the spawn point', 'ok');
+      }
+      case 'spawnpoint':
+      case 'setworldspawn': {
+        if (args.length >= 3) {
+          const x = cd(args[0], bx);
+          const y = cd(args[1], by);
+          const z = cd(args[2], bz);
+          if (x === null || y === null || z === null) return out('Usage: /spawnpoint [x y z]', 'err');
+          this.spawnPoint = new THREE.Vector3(x + 0.5, y + 0.6, z + 0.5);
+          return out(`Spawn point set to (${x}, ${y}, ${z})`, 'ok');
+        }
+        this.spawnPoint = new THREE.Vector3(p.x, p.y + 0.6, p.z);
+        return out(`Spawn point set to (${p.x.toFixed(1)}, ${p.y.toFixed(1)}, ${p.z.toFixed(1)})`, 'ok');
+      }
+      case 'summon': {
+        const key = (args[0] || '').toLowerCase();
+        if (!key) return out('Usage: /summon <npc>  ·  e.g. /summon quark  ·  see /list npcs', 'err');
+        const found = PERSONALITIES.find(
+          (x) => x.id === key || x.id.includes(key) || x.name.toLowerCase().includes(key),
         );
-        return out(`Filled region with ${blockDef(id).name}`, 'ok');
+        if (!found) return out(`Unknown NPC "${args[0]}". Try /list npcs`, 'err');
+        const px = Math.floor(p.x);
+        const pz = Math.floor(p.z);
+        const y = this.world.groundY(px, pz);
+        const actor = new NPCActor(found, new THREE.Vector3(px + 0.5, y, pz + 0.5), 4, y);
+        this.scene.add(actor.group);
+        this.npcs.push(actor);
+        return out(`Summoned ${found.emoji} ${found.name} at (${px}, ${y}, ${pz})`, 'ok');
+      }
+      case 'clear': {
+        this.hotbar = HOTBAR_DEF.map((h) => ({ id: h.id, name: h.name, tile: this.tileOf(h.id) }));
+        this.ui.setHotbarItems(this.hotbar);
+        this.setHotbar(0);
+        return out('Hotbar reset to the default set', 'ok');
+      }
+      case 'stopsound':
+        stopSpeaking();
+        return out('Stopped all NPC speech', 'ok');
+      case 'me': {
+        const t = args.join(' ');
+        if (!t) return out('Usage: /me <text>', 'err');
+        this.ui.toast(`* ${this.userMeta.name} ${t}`, 'info', 4500);
+        return out(`* ${this.userMeta.name} ${t}`, 'me');
+      }
+      case 'title': {
+        const t = args.join(' ');
+        if (!t) return out('Usage: /title <text>', 'err');
+        this.ui.bigTitle(t);
+        return out('Title shown: ' + t, 'ok');
+      }
+      case 'tellraw': {
+        const t = args.join(' ');
+        if (!t) return out('Usage: /tellraw <text>', 'err');
+        this.ui.toast(t, 'info', 5000);
+        return out(t, 'sys');
       }
       case 'fly':
         this.player.fly = !this.player.fly;
         return out(`Flight mode ${this.player.fly ? 'ON' : 'OFF'}`, 'ok');
-      case 'locate': {
-        const p = this.player.position;
+      case 'locate':
         return out(`Position: X ${p.x.toFixed(1)}  Y ${p.y.toFixed(1)}  Z ${p.z.toFixed(1)}`, 'ok');
-      }
-      case 'list':
+      case 'list': {
+        const what = (args[0] || 'scenes').toLowerCase();
+        if (what === 'players') {
+          const cur = activeProfileId();
+          for (const m of listProfiles()) out(`${m.id === cur ? '▶ ' : '   '}${m.avatar} ${m.name}`, 'sys');
+          return;
+        }
+        if (what === 'npcs') {
+          if (!this.npcs.length) return out('No NPCs here. Try /summon <name>', 'sys');
+          for (const n of this.npcs) out(`${n.personality.emoji} ${n.personality.name} — ${n.personality.id}`, 'sys');
+          return;
+        }
+        if (what === 'blocks') {
+          out(BLOCK_LIST.map((b) => b.key).join(', '), 'sys');
+          return;
+        }
         for (const s of SCENES) out(`${s.id} — ${s.icon} ${s.name} (${s.subtitle})`, 'sys');
         return;
+      }
       case 'seed':
         return out(`World seed: ${this.seed}`, 'ok');
       case 'say':
@@ -658,12 +820,22 @@ class Game {
           if (n === null) return out('Usage: /time set <0-100> (darkness %)', 'err');
           return this.setTimeOfDay(Math.max(0, Math.min(100, n)) / 100), out(`Time set (darkness ${n}%)`, 'ok');
         }
-        return out('Usage: /time day|night|noon|sunrise|sunset|set <0-100>', 'err');
+        if (cmd === 'time' && args[0] === 'add') {
+          const n = num(args[1]);
+          if (n === null) return out('Usage: /time add <0-100>', 'err');
+          return this.setTimeOfDay(Math.max(0, Math.min(100, this.timeNorm * 100 + n)) / 100), out(`Time advanced by ${n}`, 'ok');
+        }
+        return out('Usage: /time day|night|noon|sunrise|sunset|set <0-100>|add <0-100>', 'err');
       case 'night':
         return this.setTimeOfDay(1), out('Time set to night', 'ok');
       case 'weather': {
         const w = (args[0] ?? '').toLowerCase();
-        if (w !== 'clear' && w !== 'rain') return out('Usage: /weather clear|rain', 'err');
+        if (w !== 'clear' && w !== 'rain' && w !== 'thunder') return out('Usage: /weather clear|rain|thunder', 'err');
+        if (w === 'thunder') {
+          this.setWeather(true);
+          this.setTimeOfDay(1);
+          return out('Thunderstorm — rain + night', 'ok');
+        }
         this.setWeather(w === 'rain');
         return out(`Weather: ${w}`, 'ok');
       }
@@ -774,7 +946,30 @@ class Game {
     return [d.x, d.y, d.z];
   }
 
+  /** 创造 / 生存可以放置和挖掘；冒险 / 旁观只能看 */
+  get canEdit(): boolean {
+    return this.gameMode === 'creative' || this.gameMode === 'survival';
+  }
+
+  private setGameMode(m: 'survival' | 'creative' | 'adventure' | 'spectator'): string {
+    this.gameMode = m;
+    this.player.fly = m === 'creative' || m === 'spectator';
+    this.player.noclip = m === 'spectator';
+    const label = { survival: 'Survival', creative: 'Creative', adventure: 'Adventure', spectator: 'Spectator' }[m];
+    const note =
+      m === 'creative'
+        ? ' (fly on, free building)'
+        : m === 'spectator'
+          ? ' (fly + pass through blocks, no building)'
+          : m === 'adventure'
+            ? ' (no placing or mining)'
+            : ' (fly off, normal building)';
+    this.ui.toast(`🎮 ${label}${note}`, 'info', 4200);
+    return `Game mode set to ${label}`;
+  }
+
   private doEdit(): void {
+    if (!this.canEdit) return;
     const hit = this.world.raycast(
       this.player.position.x,
       this.player.position.y + 1.62,

@@ -795,6 +795,47 @@ input:focus {
   font-family: inherit;
 }
 
+/* ───────── /title 大字横幅 ───────── */
+#cmd-title {
+  position: absolute;
+  left: 50%;
+  top: 34%;
+  transform: translate(-50%, -50%);
+  font-size: 42px;
+  font-weight: 900;
+  letter-spacing: 2px;
+  white-space: nowrap;
+  pointer-events: none;
+  opacity: 0;
+  color: #fff;
+  text-shadow:
+    0 0 18px rgba(127, 216, 255, 0.75),
+    0 4px 22px rgba(0, 0, 0, 0.85);
+  z-index: 60;
+}
+
+#cmd-title.show {
+  animation: bigtitle 2.8s ease forwards;
+}
+
+@keyframes bigtitle {
+  0% {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(0.9);
+  }
+  14% {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1);
+  }
+  78% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(1.04);
+  }
+}
+
 /* ───────── 玩家系统 ───────── */
 .title-player {
   display: inline-flex;
