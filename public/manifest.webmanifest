@@ -1,0 +1,19 @@
+{
+  "name": "BlockAcademy · A Science Adventure in a Voxel World",
+  "short_name": "BlockAcademy",
+  "description": "A Minecraft-like voxel sandbox where AI-driven NPCs teach elementary-school science.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "landscape",
+  "background_color": "#0b1020",
+  "theme_color": "#0b1020",
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ]
+}

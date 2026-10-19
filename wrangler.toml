@@ -1,0 +1,8 @@
+# Cloudflare Pages project config for BlockAcademy.
+# Static output lives in dist/; the /api/llm relay lives in functions/api/llm.js.
+# Deploy locally with:  npx wrangler pages deploy dist
+# Or connect this Git repo in the Cloudflare Pages dashboard (no workflow needed).
+
+name = "blockacademy"
+pages_build_output_dir = "dist"
+compatibility_date = "2024-11-01"
