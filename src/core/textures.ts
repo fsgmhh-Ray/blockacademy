@@ -272,6 +272,104 @@ const TILES: Record<string, Painter> = {
       return pack(0x33, 0x2a, 0x22);
     }),
   ),
+
+  // ───────── 新增：花草 / 村庄 / 设施 ─────────
+  flower_blue: combine(
+    base(0x6aa84f, 0.14),
+    overlay((x, y) => {
+      const d = Math.hypot(x - 8, y - 9);
+      if (d < 2.6) return pack(0x64, 0x8e, 0xf0);
+      if (Math.abs(x - 8) < 1 && y > 9 && y < 14) return pack(0x3f, 0x7d, 0x35);
+      if (d < 3.6) return pack(0x8f, 0xb0, 0xf8);
+      return null;
+    }),
+  ),
+  flower_pink: combine(
+    base(0x6aa84f, 0.14),
+    overlay((x, y) => {
+      const d = Math.hypot(x - 8, y - 9);
+      if (d < 2.6) return pack(0xf2, 0x8f, 0xc0);
+      if (Math.abs(x - 8) < 1 && y > 9 && y < 14) return pack(0x3f, 0x7d, 0x35);
+      if (d < 3.6) return pack(0xfc, 0xc4, 0xde);
+      return null;
+    }),
+  ),
+  flower_white: combine(
+    base(0x6aa84f, 0.14),
+    overlay((x, y) => {
+      const d = Math.hypot(x - 8, y - 10);
+      if (d < 2.2) return pack(0xf6, 0xf6, 0xf2);
+      if (Math.abs(x - 8) < 1 && y > 10 && y < 14) return pack(0x3f, 0x7d, 0x35);
+      if (d < 3.2) return pack(0xdc, 0xea, 0xdc);
+      return null;
+    }),
+  ),
+  tall_grass: combine(
+    base(0x6aa84f, 0.12),
+    overlay((x, y, rnd) => {
+      if (rnd() < 0.42) return pack(0x4f, 0x8f, 0x3c);
+      if (y > 11 && rnd() < 0.3) return null;
+      return null;
+    }),
+  ),
+  hay: combine(
+    base(0xc9a84c, 0.1),
+    overlay((x, y, rnd) => (rnd() < 0.3 ? pack(0xa8, 0x8a, 0x38) : rnd() < 0.3 ? pack(0xe0, 0xc4, 0x6a) : null)),
+  ),
+  crafting_table_top: combine(
+    base(0xa97c4a, 0.08),
+    grid((gx, gy) => (gx === gy ? pack(0x7d, 0x56, 0x30) : null), 4),
+    overlay((x, y) => (x === 0 || y === 0 || x === 15 || y === 15 ? pack(0x6f, 0x4c, 0x2a) : null)),
+  ),
+  crafting_table_side: combine(
+    base(0xa97c4a, 0.08),
+    overlay((x, y) => {
+      if (y < 4) return pack(0x7d, 0x56, 0x30);
+      if (y === 4) return pack(0x5f, 0x40, 0x22);
+      return null;
+    }),
+  ),
+  furnace_front: combine(
+    base(0x8a8a8a, 0.1),
+    overlay((x, y) => {
+      if (x > 4 && x < 12 && y > 7 && y < 13) return pack(0x2a, 0x24, 0x22);
+      if (x > 5 && x < 11 && y > 9 && y < 12) return pack(0xff, 0x9c, 0x3c);
+      return null;
+    }),
+  ),
+  furnace_side: base(0x7c7c7c, 0.12),
+  torch: combine(
+    base(0x8b5a2b, 0.1),
+    overlay((x, y) => {
+      if (y > 10) return pack(0x6b, 0x42, 0x20);
+      if (y > 2 && y < 9 && Math.abs(x - 8) < 2) return pack(0xff, 0xd2, 0x6a);
+      return null;
+    }),
+  ),
+  glowstone: combine(
+    base(0xd8c88a, 0.16),
+    overlay((x, y, rnd) => (rnd() < 0.3 ? pack(0xff, 0xef, 0xa8) : rnd() < 0.25 ? pack(0xb8, 0xa4, 0x62) : null)),
+  ),
+  bookshelf: combine(
+    base(0xa97c4a, 0.08),
+    grid((gx, gy) => {
+      if (gx === 0 || gx === 3) return pack(0x7d, 0x56, 0x30);
+      const c = [pack(0xc4, 0x4a, 0x4a), pack(0x4a, 0x74, 0xc4), pack(0x4a, 0xa0, 0x5a), pack(0xc4, 0xa8, 0x4a)];
+      return c[(gx + gy * 2) % 4];
+    }, 4),
+  ),
+  bedrock: combine(
+    base(0x333338, 0.22),
+    overlay((x, y, rnd) => (rnd() < 0.28 ? pack(0x14, 0x14, 0x18) : rnd() < 0.2 ? pack(0x55, 0x55, 0x5e) : null)),
+  ),
+  carrot: combine(
+    base(0x6aa84f, 0.12),
+    overlay((x, y, rnd) => {
+      if (rnd() < 0.3) return pack(0x4f, 0x8f, 0x3c);
+      if (y > 9 && y < 14 && Math.abs(x - 8) < 2) return pack(0xe8, 0x8c, 0x3a);
+      return null;
+    }),
+  ),
 };
 
 /** tile key -> atlas 格位索引 */
@@ -280,6 +378,13 @@ let builtTexture: THREE.Texture | null = null;
 let builtCanvas: HTMLCanvasElement | null = null;
 
 /** 取原始 canvas（UI 里画方块小图标用） */
+/** 图集里实际用到的槽位数量（上限 8×8=64） */
+export const ATLAS_TILES = Object.keys(TILES).length;
+/** 贴图槽位是否被绘制（不依赖图集是否已生成，Node 里也能查） */
+export function hasTile(key: string): boolean {
+  return Object.prototype.hasOwnProperty.call(TILES, key);
+}
+
 export function atlasCanvas(): HTMLCanvasElement | null {
   buildAtlas();
   return builtCanvas;
@@ -298,6 +403,10 @@ export function buildAtlas(): THREE.Texture {
 
   let slot = 0;
   for (const key of Object.keys(TILES)) {
+    if (slot >= GRID * GRID) {
+      console.warn(`[atlas] 贴图槽位已满(64)，${key} 无法放入，会显示为空气`);
+      continue;
+    }
     const col = slot % GRID;
     const row = Math.floor(slot / GRID);
     const rnd = (() => {

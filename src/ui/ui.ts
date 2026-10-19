@@ -8,6 +8,22 @@ import { loadLLMConfig, type LLMConfig } from '../npc/brain';
 import type { ProfileMeta } from '../user/profile';
 import type { SceneDef } from '../world/scenes';
 import { questsOf, type Quest, type Progress } from '../edu/quests';
+import type { Inventory, Slot, Tab } from '../craft/inventory';
+import { item, blockItems } from '../craft/items';
+
+export type InvTarget = 'storage' | 'hotbar' | 'craft' | 'out' | 'offhand' | 'fin' | 'fout' | 'palette';
+export type Overlay = 'map' | 'settings' | 'help' | 'profiles' | 'inventory' | 'pause' | 'chatlog';
+export type PauseAction =
+  | 'resume'
+  | 'gamemode'
+  | 'inventory'
+  | 'chatlog'
+  | 'players'
+  | 'help'
+  | 'settings'
+  | 'sound'
+  | 'edition'
+  | 'title';
 
 export interface UIHooks {
   onStart: () => void;
@@ -26,12 +42,14 @@ export interface UIHooks {
   onPlayDemo: (id: string) => void;
   onCommand: (raw: string) => void;
   onConsoleClose: () => void;
-}
-
-export interface HotbarItem {
-  id: number;
-  tile: string;
-  name?: string;
+  onInvClick: (target: InvTarget, index: number) => void;
+  onInvTab: (tab: Tab) => void;
+  onFart: () => void;
+  onPause: (action: PauseAction) => void;
+  onChatlogClear: () => void;
+  onEdition: (edition: 'java' | 'bedrock') => void;
+  onGift: () => void;
+  onEat: () => void;
 }
 
 const PRESETS: { name: string; baseUrl: string; model: string; tip: string }[] = [
@@ -49,13 +67,15 @@ export class UI {
   private lastBubble: HTMLElement | null = null;
   private chipsHost!: HTMLElement;
   private askInput!: HTMLInputElement;
-  private hotbarItems: HotbarItem[] = HOTBAR.map((h) => ({ ...h }));
+  private selSlot = 0;
   private cmdInput!: HTMLInputElement;
   private cmdLog!: HTMLElement;
   private selAvatar = '🧑‍🚀';
   private selColor = '#5ad1c9';
   private playerMeta: ProfileMeta | null = null;
   private titleTimer = 0;
+  private invTab: Tab = 'bag';
+  private palette: string[] | null = null;
 
   constructor(
     private root: HTMLElement,
@@ -81,6 +101,9 @@ export class UI {
     q('overlay-settings');
     q('overlay-profiles');
     q('overlay-help');
+    q('overlay-inventory');
+    q('overlay-pause');
+    q('overlay-chatlog');
     q('showcase');
     q('sc-top');
     q('sc-bar');
@@ -91,10 +114,14 @@ export class UI {
     q('loading');
     q('cmd-console');
     q('cmd-log');
+    q('hearts');
+    q('hunger');
+    q('f3');
+    q('friend-bar');
     this.cmdInput = q('cmd-input') as HTMLInputElement;
     this.cmdLog = q('cmd-log');
     // dialog & overlay inner elements
-    ['dialog-avatar', 'dialog-name', 'dialog-role', 'dialog-engine', 'map-cards', 'preset-row', 'preset-tip', 'llm-enabled', 'llm-base', 'llm-key', 'llm-model', 'llm-save', 'llm-test', 'voice-toggle', 'ask-send', 'title-player', 'btn-profiles', 'settings-player', 'settings-player-name', 'btn-open-profiles', 'profile-list', 'profile-name', 'profile-avatars', 'profile-colors', 'btn-profile-add', 'btn-profiles-close'].forEach(
+    ['dialog-avatar', 'dialog-name', 'dialog-role', 'dialog-engine', 'map-cards', 'preset-row', 'preset-tip', 'llm-enabled', 'llm-base', 'llm-key', 'llm-model', 'llm-save', 'llm-test', 'voice-toggle', 'ask-send', 'title-player', 'btn-profiles', 'settings-player', 'settings-player-name', 'btn-open-profiles', 'profile-list', 'profile-name', 'profile-avatars', 'profile-colors', 'btn-profile-add', 'btn-profiles-close', 'inv-sub', 'inv-tabs', 'craft-grid', 'craft-out', 'inv-note', 'inv-storage', 'inv-hotbar', 'btn-inv-close', 'pause-sub', 'pm-resume', 'pm-gamemode', 'pm-inventory', 'pm-chatlog', 'pm-players', 'pm-help', 'pm-settings', 'pm-sound', 'pm-edition', 'pm-title', 'chatlog-list', 'btn-chatlog-clear', 'btn-chatlog-close', 'btn-fart', 'offhand-slot', 'btn-gift', 'btn-eat'].forEach(
       (id) => (this.el[id] = root.querySelector('#' + id) as HTMLElement),
     );
 
@@ -121,6 +148,36 @@ export class UI {
     (q('sc-prev') as HTMLButtonElement).onclick = () => hooks.onDemo('prev');
     (q('sc-skip') as HTMLButtonElement).onclick = () => hooks.onDemo('skip');
     (q('sc-replay') as HTMLButtonElement).onclick = () => hooks.onDemo('replay');
+    (q('btn-inv-close') as HTMLButtonElement).onclick = () => this.closeOverlay('inventory');
+    (q('btn-chatlog-close') as HTMLButtonElement).onclick = () => this.closeOverlay('chatlog');
+    (q('btn-chatlog-clear') as HTMLButtonElement).onclick = () => hooks.onChatlogClear();
+    (q('btn-fart') as HTMLButtonElement).onclick = () => hooks.onFart();
+    (q('btn-gift') as HTMLButtonElement).onclick = () => hooks.onGift();
+    (q('btn-eat') as HTMLButtonElement).onclick = () => hooks.onEat();
+    (
+      [
+        ['pm-resume', 'resume'],
+        ['pm-gamemode', 'gamemode'],
+        ['pm-inventory', 'inventory'],
+        ['pm-chatlog', 'chatlog'],
+        ['pm-players', 'players'],
+        ['pm-help', 'help'],
+        ['pm-settings', 'settings'],
+        ['pm-sound', 'sound'],
+        ['pm-edition', 'edition'],
+        ['pm-title', 'title'],
+      ] as [string, PauseAction][]
+    ).forEach(([id, a]) => {
+      (this.el[id] as HTMLButtonElement).onclick = () => hooks.onPause(a);
+    });
+    // 版本选择
+    root.querySelectorAll<HTMLButtonElement>('.edition-btn').forEach((b) => {
+      b.onclick = () => {
+        root.querySelectorAll('.edition-btn').forEach((x) => x.classList.remove('active'));
+        b.classList.add('active');
+        hooks.onEdition(b.dataset.ed as 'java' | 'bedrock');
+      };
+    });
 
     this.cmdInput.addEventListener('keydown', (e) => {
       e.stopPropagation();
@@ -132,13 +189,36 @@ export class UI {
     });
     this.cmdInput.addEventListener('keyup', (e) => e.stopPropagation());
 
-    this.buildHotbar();
+    // 物品栏：一个事件委托搞定所有格子
+    this.el['overlay-inventory'].addEventListener('click', (e) => {
+      const el = (e.target as HTMLElement).closest('.inv-slot') as HTMLElement | null;
+      if (!el) return;
+      const t = el.dataset.t as InvTarget;
+      if (!t) return;
+      hooks.onInvClick(t, Number(el.dataset.i ?? 0));
+    });
+    (this.el['inv-tabs'] as HTMLElement).addEventListener('click', (e) => {
+      const b = (e.target as HTMLElement).closest('.tbtn-tab') as HTMLElement | null;
+      if (!b || !b.dataset.tab) return;
+      hooks.onInvTab(b.dataset.tab as Tab);
+    });
+    document.addEventListener('mousemove', (e) => {
+      const c = this.el['overlay-inventory'].querySelector('#inv-cursor') as HTMLElement | null;
+      if (!c) return;
+      c.style.left = e.clientX + 'px';
+      c.style.top = e.clientY + 'px';
+    });
+
     this.buildSettings();
   }
 
   // ───────── basic display ─────────
   loadingDone(): void {
     this.el['loading'].classList.add('hide');
+  }
+
+  showTitle(): void {
+    this.el['title-screen'].classList.remove('hide');
   }
 
   hideTitle(): void {
@@ -183,34 +263,6 @@ export class UI {
   }
 
   // ───────── hotbar ─────────
-  setHotbarItems(items: HotbarItem[]): void {
-    this.hotbarItems = items.map((h) => ({ ...h }));
-    this.buildHotbar();
-  }
-
-  private buildHotbar(): void {
-    const host = this.el['hotbar'];
-    host.innerHTML = '';
-    this.hotbarItems.forEach((item, i) => {
-      const def = blockDef(item.id);
-      const slot = document.createElement('div');
-      slot.className = 'slot' + (i === 0 ? ' active' : '');
-      slot.dataset.index = String(i);
-      slot.title = item.name ?? def.name;
-      const cv = document.createElement('canvas');
-      cv.width = 32;
-      cv.height = 32;
-      this.paintTile(cv, item.tile);
-      slot.appendChild(cv);
-      const lb = document.createElement('span');
-      lb.textContent = String(i + 1);
-      lb.style.cssText = 'position:absolute;right:2px;top:1px;font-size:9px;color:#7f8ea8';
-      slot.appendChild(lb);
-      slot.onclick = () => this.hooks.onHotbar(i);
-      host.appendChild(slot);
-    });
-  }
-
   // ───────── command console ─────────
   openConsole(): void {
     this.el['cmd-console'].classList.add('show');
@@ -366,20 +418,274 @@ export class UI {
     this.el['quests'].innerHTML = `<h3>🎯 Explore this stop <span style="font-size:11px;color:var(--muted)">M Map · O Settings</span></h3>${rows}<div class="meta">Talking, watching demos, and building all make progress. Finish them all to earn this scene's badge.</div>`;
   }
 
+  // ───────── HUD：生命 / 饥饿 / 调试屏 / 好友 ─────────
+  private lastStats = '';
+  setStats(health: number, maxHealth: number, hunger: number): void {
+    const key = `${Math.round(health)}|${Math.round(hunger)}`;
+    if (key === this.lastStats) return;
+    this.lastStats = key;
+    const hearts = 10;
+    const v = (health / maxHealth) * hearts;
+    let a = '';
+    for (let i = 0; i < hearts; i++) a += i + 1 <= v ? '❤️' : i + 0.5 <= v ? '💗' : '🖤';
+    this.el['hearts'].textContent = a;
+    const f = (hunger / 100) * hearts;
+    let b = '';
+    for (let i = 0; i < hearts; i++) b += i + 1 <= f ? '🍗' : '🥄';
+    this.el['hunger'].textContent = b;
+  }
+
+  setF3(show: boolean, text: string): void {
+    this.el['f3'].classList.toggle('show', show);
+    if (show) this.el['f3'].innerHTML = text;
+  }
+
+  setFriends(list: { emoji: string; name: string; hearts: number }[]): void {
+    if (!list.length) {
+      this.el['friend-bar'].innerHTML = '';
+      return;
+    }
+    this.el['friend-bar'].innerHTML = list
+      .map(
+        (f) =>
+          `<div class="friend"><span>${f.emoji}</span><small>${escapeHtml(f.name)}</small><b>${'💛'.repeat(
+            Math.max(0, Math.min(3, f.hearts)),
+          )}</b></div>`,
+      )
+      .join('');
+  }
+
+  // ───────── 背包与合成 ─────────
+  private itemIcon(key: string): HTMLElement {
+    const it = item(key);
+    const d = document.createElement('div');
+    d.className = 'ic';
+    if (it.block !== undefined) {
+      const def = blockDef(it.block);
+      const tileKey = typeof def.tiles === 'string' ? def.tiles : def.tiles.side;
+      const cv = document.createElement('canvas');
+      cv.width = 32;
+      cv.height = 32;
+      this.paintTile(cv, tileKey);
+      d.appendChild(cv);
+    } else {
+      d.textContent = it.icon;
+      d.classList.add('emoji');
+    }
+    return d;
+  }
+
+  private paintSlot(host: HTMLElement, slot: Slot | null, target: InvTarget, index: number): void {
+    host.className = 'inv-slot' + (target === 'out' || target === 'fout' ? ' out' : '');
+    host.dataset.t = target;
+    host.dataset.i = String(index);
+    host.innerHTML = '';
+    if (!slot) return;
+    const it = item(slot.key);
+    host.appendChild(this.itemIcon(slot.key));
+    if (slot.count > 1) {
+      const n = document.createElement('span');
+      n.className = 'n';
+      n.textContent = String(slot.count);
+      host.appendChild(n);
+    }
+    host.title = `${it.name} · ${it.cn}`;
+  }
+
+  private gridEl(cols: number): HTMLDivElement {
+    const g = document.createElement('div');
+    g.className = 'inv-grid';
+    g.style.setProperty('--cols', String(cols));
+    return g;
+  }
+
+  renderInventory(inv: Inventory, creative: boolean): void {
+    this.invTab = inv.tab;
+    const tabs = this.el['inv-tabs'];
+    tabs.querySelectorAll<HTMLElement>('.tbtn-tab').forEach((b) => b.classList.toggle('active', b.dataset.tab === inv.tab));
+
+    // 合成区
+    const cg = this.el['craft-grid'];
+    cg.innerHTML = '';
+    const size = inv.tab === 'craft' ? 3 : inv.tab === 'bag' ? 2 : 1;
+    cg.style.setProperty('--cols', String(size));
+    const ids = inv.tab === 'craft' ? [0, 1, 2, 3, 4, 5, 6, 7, 8] : inv.tab === 'bag' ? [0, 1, 3, 4] : [0];
+    ids.forEach((i) => {
+      const s = document.createElement('div');
+      const src = inv.tab === 'furnace' ? inv.furnaceIn : inv.craft[i];
+      this.paintSlot(s, src, inv.tab === 'furnace' ? 'fin' : 'craft', i);
+      cg.appendChild(s);
+    });
+    const outTarget: InvTarget = inv.tab === 'furnace' ? 'fout' : 'out';
+    this.paintSlot(this.el['craft-out'], inv.craftResult, outTarget, 0);
+    this.paintSlot(this.el['offhand-slot'], inv.offhand, 'offhand', 0);
+
+    const note =
+      inv.tab === 'furnace'
+        ? '🔥 Put something in → click the result. Iron ore → iron ingot, sand → glass, wheat → bread.'
+        : inv.tab === 'craft'
+          ? '🪚 3×3 crafting — stand near a crafting table. Move things in, then click the result.'
+          : '🎒 2×2 crafting — planks, sticks, torches and a crafting table can all be made right here.';
+    this.el['inv-note'].textContent = note;
+
+    // 储物 / 创造模式物品栏
+    const st = this.el['inv-storage'];
+    st.innerHTML = '';
+    if (creative) {
+      const row = document.createElement('div');
+      row.className = 'inv-subrow';
+      const mk = (label: string, on: boolean, cb: () => void) => {
+        const b = document.createElement('button');
+        b.className = 'tbtn-tab' + (on ? ' active' : '');
+        b.textContent = label;
+        b.onclick = cb;
+        return b;
+      };
+      const showPalette = this.palette !== null;
+      row.appendChild(mk('🎒 Bag', !showPalette, () => (this.palette = null)));
+      row.appendChild(mk('📚 All blocks', showPalette, () => (this.palette = this.paletteKeys())));
+      st.appendChild(row);
+    }
+    const grid = this.gridEl(9);
+    if (this.palette) {
+      this.palette.forEach((k, i) => {
+        const s = document.createElement('div');
+        this.paintSlot(s, { key: k, count: 1 }, 'palette', i);
+        grid.appendChild(s);
+      });
+    } else {
+      for (let i = 9; i < 36; i++) {
+        const s = document.createElement('div');
+        this.paintSlot(s, inv.slots[i], 'storage', i);
+        grid.appendChild(s);
+      }
+    }
+    st.appendChild(grid);
+
+    // 快捷栏
+    const hb = this.el['inv-hotbar'];
+    hb.innerHTML = '';
+    hb.style.setProperty('--cols', '9');
+    for (let i = 0; i < 9; i++) {
+      const s = document.createElement('div');
+      this.paintSlot(s, inv.slots[i], 'hotbar', i);
+      s.classList.toggle('sel', i === this.selSlot);
+      hb.appendChild(s);
+    }
+
+    // 手上拿的东西（跟随鼠标）
+    this.renderCursor(inv.cursor);
+  }
+
+  private paletteKeys(): string[] {
+    return blockItems().map((i) => i.key);
+  }
+
+  private renderCursor(slot: Slot | null): void {
+    const host = this.el['overlay-inventory'];
+    const old = host.querySelector('#inv-cursor');
+    if (old) old.remove();
+    if (!slot) return;
+    const c = document.createElement('div');
+    c.id = 'inv-cursor';
+    c.appendChild(this.itemIcon(slot.key));
+    if (slot.count > 1) {
+      const n = document.createElement('span');
+      n.className = 'n';
+      n.textContent = String(slot.count);
+      c.appendChild(n);
+    }
+    host.appendChild(c);
+  }
+
+  renderHotbar(inv: Inventory, sel: number): void {
+    const host = this.el['hotbar'];
+    host.innerHTML = '';
+    for (let i = 0; i < 9; i++) {
+      const slot = document.createElement('div');
+      slot.className = 'slot' + (i === sel ? ' active' : '');
+      const s = inv.slots[i];
+      if (s) {
+        slot.appendChild(this.itemIcon(s.key));
+        const it = item(s.key);
+        slot.title = `${it.name} · ${it.cn}`;
+        if (s.count > 1) {
+          const n = document.createElement('span');
+          n.className = 'n';
+          n.textContent = String(s.count);
+          slot.appendChild(n);
+        }
+      } else {
+        slot.classList.add('empty');
+      }
+      const lb = document.createElement('span');
+      lb.className = 'num';
+      lb.textContent = String(i + 1);
+      slot.appendChild(lb);
+      slot.onclick = () => this.hooks.onHotbar(i);
+      host.appendChild(slot);
+    }
+  }
+
+  // ───────── 暂停菜单 ─────────
+  openPause(): void {
+    this.openOverlay('pause');
+  }
+  setPauseLabels(o: { mode: string; edition: string; sound: boolean; scene: string; player: string }): void {
+    this.el['pm-gamemode'].textContent = `🎮 Game Mode: ${o.mode}`;
+    this.el['pm-edition'].textContent = `🖥️ Edition: ${o.edition}`;
+    this.el['pm-sound'].textContent = o.sound ? '🔊 Sound: On' : '🔇 Sound: Off';
+    this.el['pause-sub'].textContent = `${o.player} · ${o.scene}`;
+  }
+
+  // ───────── 聊天记录 ─────────
+  renderChatLog(entries: { emoji: string; who: string; text: string; me: boolean; at: string }[]): void {
+    const host = this.el['chatlog-list'];
+    if (!entries.length) {
+      host.innerHTML = '<div class="empty-log">No conversations yet. Walk up to a resident and press E to chat!</div>';
+      return;
+    }
+    host.innerHTML = entries
+      .slice(-200)
+      .reverse()
+      .map(
+        (e) =>
+          `<div class="log-row ${e.me ? 'me' : ''}"><span class="who">${e.emoji} ${escapeHtml(e.who)}</span><span class="tx">${escapeHtml(
+            e.text,
+          )}</span><span class="at">${escapeHtml(e.at)}</span></div>`,
+      )
+      .join('');
+  }
+
   // ───────── overlays ─────────
-  openOverlay(which: 'map' | 'settings' | 'help' | 'profiles'): void {
+  openOverlay(which: Overlay): void {
     this.el[`overlay-${which}`].classList.add('show');
   }
-  closeOverlay(which: 'map' | 'settings' | 'help' | 'profiles'): void {
+  closeOverlay(which: Overlay): void {
     this.el[`overlay-${which}`].classList.remove('show');
     this.askInput?.focus?.();
+  }
+  isOverlayOpen(which: Overlay): boolean {
+    return this.el[`overlay-${which}`].classList.contains('show');
+  }
+  /** 有任何面板打开时应该冻结玩家操作（触屏版没有指针锁定，必须靠这个） */
+  anyOverlayOpen(): boolean {
+    for (const w of ['map', 'settings', 'help', 'profiles', 'inventory', 'pause', 'chatlog'] as Overlay[]) {
+      if (this.el[`overlay-${w}`].classList.contains('show')) return true;
+    }
+    return false;
+  }
+  closeAllOverlays(): void {
+    for (const w of ['map', 'settings', 'help', 'profiles', 'inventory', 'pause', 'chatlog'] as Overlay[]) {
+      this.el[`overlay-${w}`].classList.remove('show');
+    }
   }
   openSettings(): void {
     this.fillSettings(loadLLMConfig());
     if (this.playerMeta) this.setSettingsPlayer(this.playerMeta);
     this.openOverlay('settings');
   }
-  toggleOverlay(which: 'map' | 'settings' | 'help' | 'profiles'): void {
+  toggleOverlay(which: Overlay): void {
     const e = this.el[`overlay-${which}`];
     e.classList.toggle('show');
   }
@@ -610,6 +916,16 @@ const TEMPLATE = `
 
 <div id="hotbar" class="panel"></div>
 
+<div id="hud-hearts">
+  <div id="hearts"></div>
+  <div id="hunger"></div>
+</div>
+
+<button id="btn-fart" title="Fart (G)">💨</button>
+
+<div id="friend-bar"></div>
+<div id="f3"></div>
+
 <div id="quests" class="panel"></div>
 
 <div id="dialog" class="panel">
@@ -626,6 +942,7 @@ const TEMPLATE = `
   <div id="quick"></div>
   <div id="ask-row">
     <input id="ask-input" placeholder="Ask anything… (Enter to send)" autocomplete="off" />
+    <button id="btn-gift" title="Give them what you are holding">🎁</button>
     <button id="ask-send" class="primary">Send</button>
   </div>
 </div>
@@ -723,6 +1040,68 @@ const TEMPLATE = `
   </div>
 </div>
 
+<div class="overlay" id="overlay-inventory">
+  <div class="sheet panel">
+    <h2>🎒 Inventory &amp; Crafting</h2>
+    <div class="sub" id="inv-sub">Punch a tree to get wood → craft planks → craft a crafting table!</div>
+    <div class="row" id="inv-tabs">
+      <button class="tbtn-tab active" data-tab="bag">🎒 Bag (2×2)</button>
+      <button class="tbtn-tab" data-tab="craft">🪚 Table (3×3)</button>
+      <button class="tbtn-tab" data-tab="furnace">🔥 Furnace</button>
+    </div>
+    <div class="inv-wrap">
+      <div class="inv-craft">
+        <div class="inv-grid" id="craft-grid"></div>
+        <div class="inv-arrow">➜</div>
+        <div class="inv-slot out" id="craft-out"></div>
+        <div class="inv-off">
+          <span class="inv-label">🖐 Offhand</span>
+          <div class="inv-slot" id="offhand-slot"></div>
+        </div>
+        <div class="inv-note" id="inv-note"></div>
+      </div>
+      <div class="inv-storage" id="inv-storage"></div>
+    </div>
+    <div class="inv-hotbar-row">
+      <span class="inv-label">Hotbar</span>
+      <div class="inv-grid" id="inv-hotbar"></div>
+      <button id="btn-eat" class="tbtn-tab">🍽 Eat</button>
+      <button id="btn-inv-close" class="ghost" style="margin-left:auto">Close (E)</button>
+    </div>
+  </div>
+</div>
+
+<div class="overlay" id="overlay-pause">
+  <div class="sheet panel narrow">
+    <h2>⏸️ Game Menu</h2>
+    <div class="sub" id="pause-sub"></div>
+    <div class="menu-list">
+      <button id="pm-resume" class="primary">▶ Back to Game</button>
+      <button id="pm-gamemode">🎮 Game Mode: Creative</button>
+      <button id="pm-inventory">🎒 Inventory &amp; Crafting</button>
+      <button id="pm-chatlog">💬 Chat Log</button>
+      <button id="pm-players">👥 Players</button>
+      <button id="pm-help">🎮 How to Play</button>
+      <button id="pm-settings">⚙️ Settings</button>
+      <button id="pm-sound">🔊 Sound: On</button>
+      <button id="pm-edition">🖥️ Edition: JAVA</button>
+      <button id="pm-title" class="ghost">🏠 Back to Title</button>
+    </div>
+  </div>
+</div>
+
+<div class="overlay" id="overlay-chatlog">
+  <div class="sheet panel">
+    <h2>💬 Chat Log</h2>
+    <div class="sub">Every conversation you had with the residents is saved for this player.</div>
+    <div id="chatlog-list" class="chatlog"></div>
+    <div class="row" style="justify-content:flex-end;margin-top:14px">
+      <button id="btn-chatlog-clear" class="ghost">🗑 Clear</button>
+      <button id="btn-chatlog-close" class="ghost">Close</button>
+    </div>
+  </div>
+</div>
+
 <div class="overlay" id="overlay-help">
   <div class="sheet panel">
     <h2>🎮 How to Play</h2>
@@ -734,8 +1113,14 @@ const TEMPLATE = `
       <div class="card"><div class="ic">🎬</div><b>3D Demo</b><small>Step onto a glowing demo pad and press E for a narrated animation</small></div>
       <div class="card"><div class="ic">🗺️</div><b>Change Scene</b><small>Press M for the map to teleport, or step on a teleport pad</small></div>
       <div class="card"><div class="ic">🎯</div><b>Quests</b><small>Talking, watching demos, and building all advance quests; finish to earn badges</small></div>
-      <div class="card"><div class="ic">👥</div><b>Players</b><small>Press <kbd>P</kbd> to switch player — each keeps their own AI settings, voice and progress</small></div>
-      <div class="card"><div class="ic">⌘</div><b>Minecraft-style commands</b><small>Press <kbd>T</kbd> or <kbd>/</kbd>. Move <code>/tp /teleport /locate /fly</code> · Build <code>/setblock /fill /clone /give /clear</code> · World <code>/gamemode /time /weather</code> · Chat <code>/say /me /title /tellraw /stopsound</code> · Info <code>/list /seed /summon</code> · Life <code>/kill /spawnpoint</code>. Coordinates support <code>~</code>. Type <code>/help</code> for all.</small></div>
+      <div class="card"><div class="ic">🎒</div><b>Inventory &amp; Crafting</b><small>Press <kbd>E</kbd> or <kbd>I</kbd>. Punch a tree → planks → sticks → <b>crafting table</b> → tools. 2×2 in your bag, 3×3 at a table, smelting at a furnace.</small></div>
+      <div class="card"><div class="ic">🐄</div><b>Animals &amp; Pets</b><small>Cows, pigs, sheep, chickens, dogs, cats and slimes. Feed an animal its favourite food 3 times and it becomes your <b>pet</b> and follows you. Empty hand → collect milk, eggs, wool, leather.</small></div>
+      <div class="card"><div class="ic">🤝</div><b>Make Friends</b><small>Talk to a resident and press <kbd>🎁</kbd> to give them what you hold. 3 gifts and they become your best friend — they follow you and even help you build!</small></div>
+      <div class="card"><div class="ic">🌙</div><b>Sky</b><small>A sun by day, a moon and stars by night, and drifting clouds. Turn on the day-night cycle with <code>/cycle on</code>; beware the Shadows that come out at night.</small></div>
+      <div class="card"><div class="ic">💨</div><b>Fart</b><small>Press <kbd>G</kbd> (or the 💨 button) to let one rip. It even scares the animals.</small></div>
+      <div class="card"><div class="ic">👥</div><b>Players</b><small>Press <kbd>P</kbd> to switch player — each keeps their own AI settings, voice, bag, progress and chat log</small></div>
+      <div class="card"><div class="ic">📱</div><b>Editions</b><small>Pick <b>JAVA EDITION</b> for keyboard &amp; mouse (with the <kbd>F3</kbd> debug screen), or <b>BEDROCK EDITION</b> for touch controls with a virtual joystick</small></div>
+      <div class="card"><div class="ic">⌘</div><b>Minecraft-style commands</b><small>Press <kbd>T</kbd> or <kbd>/</kbd>. Move <code>/tp /teleport /locate /fly</code> · Build <code>/setblock /fill /clone /give /clear</code> · World <code>/gamemode /time /weather /cycle</code> · Chat <code>/say /me /title /tellraw /stopsound</code> · Info <code>/list /seed /summon /mobs /pets</code> · Life <code>/kill /spawnpoint /heal /feed</code>. Coordinates support <code>~</code>. Type <code>/help</code> for all.</small></div>
     </div>
     <div class="row" style="justify-content:flex-end;margin-top:18px">
       <button id="btn-help-close" class="ghost">Close (H)</button>
@@ -760,6 +1145,16 @@ const TEMPLATE = `
   <div>
     <div class="logo">BlockAcademy</div>
     <div class="tag">BlockAcademy · a primary-science world where AI teachers live</div>
+    <div class="edition-row">
+      <button class="edition-btn active" data-ed="java">
+        <b>JAVA EDITION</b>
+        <small>⌨️ Keyboard &amp; Mouse</small>
+      </button>
+      <button class="edition-btn" data-ed="bedrock">
+        <b>BEDROCK EDITION</b>
+        <small>📱 Touch / Mobile</small>
+      </button>
+    </div>
     <div id="title-player" class="title-player"></div>
     <div class="row" style="justify-content:center">
       <button id="btn-start" class="primary" style="font-size:16px;padding:12px 32px">▶ Start Exploring</button>
@@ -768,7 +1163,8 @@ const TEMPLATE = `
     </div>
     <div class="keys">
       <kbd>W A S D</kbd> Move · <kbd>Space</kbd> Jump · <kbd>F</kbd> Fly · <kbd>L-click</kbd> Mine · <kbd>R-click</kbd> Place<br />
-      <kbd>E</kbd> Talk / Trigger Demo · <kbd>M</kbd> Map · <kbd>O</kbd> Settings · <kbd>P</kbd> Players · <kbd>H</kbd> Help · <kbd>T</kbd> Commands · <kbd>ESC</kbd> Release Mouse
+      <kbd>E</kbd> Talk / Inventory · <kbd>I</kbd> Inventory · <kbd>G</kbd> Fart · <kbd>C</kbd> Left hand · <kbd>M</kbd> Map<br />
+      <kbd>O</kbd> Settings · <kbd>P</kbd> Players · <kbd>H</kbd> Help · <kbd>T</kbd> Commands · <kbd>ESC</kbd> Menu · <kbd>F3</kbd> Debug
     </div>
   </div>
 </div>

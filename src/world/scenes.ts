@@ -49,15 +49,6 @@ export interface SceneDef {
 
 const GRID_PAD = 34;
 
-function gardens(w: World, center = 64, size = 18): void {
-  for (let x = center - size; x <= center + size; x++)
-    for (let z = center - size; z <= center + size; z++) {
-      const g = groundAt(w, x, z);
-      w.putFast(x, g - 1, z, blocks.farmland);
-      if ((x * z) % 3 === 0) w.putFast(x, g, z, blocks.wheat);
-    }
-}
-
 function pathLine(w: World, x0: number, z0: number, x1: number, z1: number, id: number): void {
   const steps = Math.max(Math.abs(x1 - x0), Math.abs(z1 - z0));
   for (let i = 0; i <= steps; i++) {
@@ -72,6 +63,122 @@ function pathLine(w: World, x0: number, z0: number, x1: number, z1: number, id: 
         if (g > 1) w.putFast(px, g - 1, pz, id);
       }
   }
+}
+
+/** 一圈矮栅栏（牧场、菜地都用它） */
+function fenceRing(w: World, x0: number, z0: number, x1: number, z1: number, id = blocks.wood): void {
+  for (let x = x0; x <= x1; x++)
+    for (const z of [z0, z1]) {
+      const g = groundAt(w, x, z);
+      w.putFast(x, g, z, id);
+    }
+  for (let z = z0 + 1; z < z1; z++)
+    for (const x of [x0, x1]) {
+      const g = groundAt(w, x, z);
+      w.putFast(x, g, z, id);
+    }
+}
+
+/** 村口水井 */
+function well(w: World, cx: number, cz: number): void {
+  const g = groundAt(w, cx, cz);
+  for (let x = cx - 2; x <= cx + 2; x++)
+    for (let z = cz - 2; z <= cz + 2; z++) {
+      const gg = groundAt(w, x, z);
+      for (let y = gg; y <= g; y++) w.putFast(x, y, z, blocks.cobble);
+    }
+  for (let x = cx - 1; x <= cx + 1; x++)
+    for (let z = cz - 1; z <= cz + 1; z++) {
+      w.putFast(x, g, z, 0);
+      w.putFast(x, g - 1, z, blocks.water);
+    }
+  for (const [x, z] of [
+    [cx - 1, cz - 1],
+    [cx + 1, cz - 1],
+    [cx - 1, cz + 1],
+    [cx + 1, cz + 1],
+  ] as [number, number][])
+    for (let y = g + 1; y <= g + 3; y++) w.putFast(x, y, z, blocks.wood);
+  for (let x = cx - 2; x <= cx + 2; x++)
+    for (let z = cz - 2; z <= cz + 2; z++) w.putFast(x, g + 4, z, blocks.brick);
+  w.putFast(cx, g + 3, cz, blocks.lamp);
+}
+
+/** 风车：收窄的石塔 + 十字风叶 */
+function windmill(w: World, cx: number, cz: number): void {
+  const g = groundAt(w, cx, cz);
+  for (let y = 0; y < 9; y++) {
+    const r = y < 5 ? 2 : 1;
+    for (let x = cx - r; x <= cx + r; x++)
+      for (let z = cz - r; z <= cz + r; z++) {
+        if (Math.abs(x - cx) === r && Math.abs(z - cz) === r) continue;
+        w.putFast(x, g + y, z, blocks.stoneBrick);
+      }
+  }
+  for (let x = cx - 2; x <= cx + 2; x++)
+    for (let z = cz - 2; z <= cz + 2; z++) w.putFast(x, g + 9, z, blocks.brick);
+  // 风叶（十字）
+  for (let i = 1; i <= 3; i++) {
+    w.putFast(cx + i, g + 6, cz, blocks.plank);
+    w.putFast(cx - i, g + 6, cz, blocks.plank);
+    w.putFast(cx, g + 6 + i, cz, blocks.plank);
+    w.putFast(cx, g + 6 - i, cz, blocks.plank);
+  }
+  w.putFast(cx, g + 6, cz, blocks.wood);
+}
+
+/** 菜地：耕地 + 麦子 + 胡萝卜，中间一条水渠 */
+function cropField(w: World, x0: number, z0: number, x1: number, z1: number): void {
+  for (let x = x0; x <= x1; x++)
+    for (let z = z0; z <= z1; z++) {
+      const g = groundAt(w, x, z);
+      const mid = z === Math.round((z0 + z1) / 2);
+      if (mid) {
+        w.putFast(x, g - 1, z, blocks.water);
+        w.putFast(x, g, z, 0);
+        continue;
+      }
+      w.putFast(x, g - 1, z, blocks.farmland);
+      if ((x + z) % 3 === 0) w.putFast(x, g, z, (x * z) % 7 < 3 ? blocks.wheat : blocks.carrot);
+    }
+}
+
+/** 工具小屋：里面有工作台和熔炉，玩家可以直接用 */
+function workshop(w: World, cx: number, cz: number): void {
+  const g = groundAt(w, cx, cz);
+  box(w, cx - 3, g, cz - 3, cx + 3, g + 3, cz + 3, blocks.plank, true);
+  box(w, cx - 3, g, cz - 3, cx + 3, g, cz + 3, blocks.cobble);
+  for (let y = 0; y <= 2; y++)
+    box(w, cx - 3 - y, g + 4 + y, cz - 3 - y, cx + 3 + y, g + 4 + y, cz + 3 + y, blocks.stoneBrick, true);
+  // 门洞
+  for (let y = g + 1; y <= g + 2; y++)
+    for (let x = cx - 1; x <= cx + 1; x++) w.putFast(x, y, cz + 3, 0);
+  // 工作台 + 熔炉 + 书架 + 火把
+  w.putFast(cx - 2, g + 1, cz - 2, blocks.craftingTable);
+  w.putFast(cx + 2, g + 1, cz - 2, blocks.furnace);
+  w.putFast(cx - 2, g + 1, cz + 1, blocks.bookshelf);
+  w.putFast(cx + 2, g + 1, cz + 1, blocks.bookshelf);
+  w.putFast(cx, g + 3, cz, blocks.torch);
+  w.putFast(cx, g + 1, cz - 1, blocks.hay);
+}
+
+/** 市集小摊 */
+function stall(w: World, cx: number, cz: number, cloth: number): void {
+  const g = groundAt(w, cx, cz);
+  for (const x of [cx - 2, cx + 2]) for (let y = g + 1; y <= g + 3; y++) w.putFast(x, y, cz, blocks.wood);
+  for (let x = cx - 2; x <= cx + 2; x++) w.putFast(x, g + 1, cz, blocks.plank);
+  for (let x = cx - 3; x <= cx + 3; x++) w.putFast(x, g + 4, cz, cloth);
+  w.putFast(cx - 1, g + 2, cz, blocks.hay);
+  w.putFast(cx + 1, g + 2, cz, blocks.flowerRed);
+}
+
+/** 干草堆 */
+function hayPile(w: World, cx: number, cz: number): void {
+  const g = groundAt(w, cx, cz);
+  w.putFast(cx, g, cz, blocks.hay);
+  w.putFast(cx, g + 1, cz, blocks.hay);
+  w.putFast(cx + 1, g, cz, blocks.hay);
+  w.putFast(cx, g, cz + 1, blocks.hay);
 }
 
 /** 圆形小球（做星球模型） */
@@ -126,13 +233,41 @@ export const SCENES: SceneDef[] = [
       for (let x = 63; x <= 67; x++) for (let z = 63; z <= 67; z++) w.putFast(x, 16, z, blocks.water);
       column(w, 65, 65, 17, 20, blocks.quartz);
       w.putFast(65, 21, 65, blocks.lamp);
-      // 房子
+      // 房子（四角各一座，颜色各不相同）
       house(w, 44, 48, 9, 8, 4, blocks.plank, blocks.brick);
       house(w, 80, 46, 8, 9, 4, blocks.plank, blocks.woolRed);
       house(w, 46, 82, 8, 8, 4, blocks.plank, blocks.woolYellow);
       house(w, 82, 80, 9, 8, 5, blocks.stoneBrick, blocks.brick);
-      // 农田
-      gardens(w, 64, 12);
+      // 再加两座小屋 + 一座工具房
+      house(w, 56, 44, 7, 7, 4, blocks.plank, blocks.woolBlue);
+      house(w, 74, 86, 7, 7, 4, blocks.plank, blocks.woolPurple);
+      workshop(w, 88, 56);
+      // 水井 + 风车
+      well(w, 58, 70);
+      windmill(w, 30, 88);
+      // 市集
+      stall(w, 70, 56, blocks.woolRed);
+      stall(w, 56, 60, blocks.woolBlue);
+      // 村口也有现成的工作台和熔炉，走过去就能合成
+      for (const [cx, cz] of [
+        [60, 68],
+        [69, 69],
+      ] as [number, number][]) {
+        const g = groundAt(w, cx, cz);
+        w.putFast(cx, g - 1, cz, blocks.stoneBrick);
+        w.putFast(cx, g, cz, blocks.craftingTable);
+        w.putFast(cx + 1, g, cz, blocks.furnace);
+      }
+      // 农田（一片麦子 + 一片胡萝卜）
+      cropField(w, 20, 40, 34, 54);
+      cropField(w, 96, 74, 110, 88);
+      // 牧场：栅栏 + 干草堆，牛羊猪鸡就在里面散步
+      fenceRing(w, 90, 20, 104, 34);
+      for (const [hx, hz] of [
+        [95, 25],
+        [100, 29],
+      ] as [number, number][])
+        hayPile(w, hx, hz);
       // 小河
       const n = new ValueNoise2D(9);
       for (let z = 8; z < w.sz - 8; z++) {
@@ -149,9 +284,18 @@ export const SCENES: SceneDef[] = [
         if (g < 12 || (Math.abs(x - 64) < 16 && Math.abs(z - 64) < 16)) return;
         tree(w, x, z, 4 + Math.floor(Math.random() * 3));
       });
-      scatter(w, 90, 5, (x, z) => {
+      // 五颜六色的花 + 高草
+      scatter(w, 150, 4, (x, z) => {
         const g = groundAt(w, x, z);
-        if (g > 10) w.putFast(x, g, z, Math.random() < 0.5 ? blocks.flowerRed : blocks.flowerYellow);
+        if (g <= 10) return;
+        if (Math.abs(x - 64) < 14 && Math.abs(z - 64) < 14) return;
+        const r = Math.random();
+        if (r < 0.42) w.putFast(x, g, z, blocks.tallGrass);
+        else if (r < 0.58) w.putFast(x, g, z, blocks.flowerRed);
+        else if (r < 0.72) w.putFast(x, g, z, blocks.flowerYellow);
+        else if (r < 0.84) w.putFast(x, g, z, blocks.flowerBlue);
+        else if (r < 0.94) w.putFast(x, g, z, blocks.flowerPink);
+        else w.putFast(x, g, z, blocks.flowerWhite);
       });
       pathLine(w, 64, 64, 64, 90, blocks.gravel);
       pathLine(w, 64, 64, 36, 64, blocks.gravel);

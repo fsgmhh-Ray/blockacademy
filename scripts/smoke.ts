@@ -3,8 +3,15 @@
  * 用法：npm run smoke
  */
 import { buildChunkMesh } from '../src/core/mesher';
-import { blockDef } from '../src/core/blockRegistry';
+import { blockDef, BLOCK_LIST } from '../src/core/blockRegistry';
+import { hasTile, GRID, ATLAS_TILES } from '../src/core/textures';
 import { SCENES } from '../src/world/scenes';
+import { Inventory } from '../src/craft/inventory';
+import { allRecipes } from '../src/craft/crafting';
+import { allItems, blockItems } from '../src/craft/items';
+
+const RECIPE_COUNT = allRecipes().length;
+const ITEM_COUNT = allItems().length;
 
 class FakeWorld {
   data: Uint8Array;
@@ -136,10 +143,70 @@ for (const scene of SCENES) {
   console.log('');
 }
 
+// 合成与背包自检
+console.log('【合成】');
+{
+  const inv = new Inventory();
+  check(inv.slots.every((s) => s === null), '新背包必须是空的');
+
+  const put = (i: Inventory, cells: Record<number, string>) => {
+    i.craft = Array.from({ length: 9 }, () => null);
+    for (const [k, v] of Object.entries(cells)) i.craft[Number(k)] = { key: v, count: 1 };
+  };
+  const result = (i: Inventory) => i.craftResult;
+
+  inv.tab = 'bag';
+  put(inv, { 0: 'wood' });
+  check(result(inv)?.key === 'plank' && result(inv)?.count === 4, '1 木头 → 4 木板');
+  put(inv, { 0: 'plank', 1: 'plank' });
+  check(result(inv)?.key === 'stick' && result(inv)?.count === 4, '2 木板 → 4 木棍');
+  put(inv, { 0: 'plank', 1: 'plank', 3: 'plank', 4: 'plank' });
+  check(result(inv)?.key === 'crafting_table', '4 木板 → 工作台');
+
+  inv.tab = 'craft';
+  // 形状配方平移到右下角也必须识别（防止裁剪逻辑又把 . 当成内容）
+  put(inv, { 4: 'plank', 5: 'plank', 7: 'plank', 8: 'plank' });
+  check(result(inv)?.key === 'crafting_table', '形状配方平移后仍可识别');
+  put(inv, { 0: 'plank', 1: 'plank', 2: 'plank', 4: 'stick', 7: 'stick' });
+  check(result(inv)?.key === 'wood_pickaxe', '木镐配方');
+  put(inv, { 1: 'crystal_shard', 4: 'crystal_shard', 7: 'stick' });
+  check(result(inv)?.key === 'crystal_sword', '水晶剑配方（窄形状）');
+  put(inv, { 0: 'cobble', 1: 'cobble', 2: 'cobble', 3: 'cobble', 5: 'cobble', 6: 'cobble', 7: 'cobble', 8: 'cobble' });
+  check(result(inv)?.key === 'furnace', '8 圆石 → 熔炉');
+
+  // 3×3 专属配方不能在 2×2 里合成
+  inv.tab = 'bag';
+  put(inv, { 0: 'plank', 1: 'plank', 4: 'stick', 3: 'stick' });
+  check(result(inv)?.key !== 'wood_pickaxe', '工作台配方在 2×2 里不生效');
+
+  inv.tab = 'furnace';
+  inv.furnaceIn = { key: 'iron_ore', count: 1 };
+  check(result(inv)?.key === 'iron_ingot', '熔炉：铁矿石 → 铁锭');
+  inv.furnaceIn = { key: 'sand', count: 1 };
+  check(result(inv)?.key === 'glass', '熔炉：沙子 → 玻璃');
+
+  const inv2 = new Inventory();
+  inv2.add('cobble', 200);
+  check(inv2.countOf('cobble') === 200, '大量物品可堆进多格');
+  check(inv2.remove('cobble', 150) && inv2.countOf('cobble') === 50, '背包扣除正确');
+  check(!inv2.remove('cobble', 9999), '数量不足时扣除失败');
+
+  const inv3 = new Inventory();
+  inv3.add('wood_pickaxe', 1);
+  inv3.add('bread', 5);
+  inv3.offhand = { key: 'torch', count: 3 };
+  const inv4 = new Inventory();
+  inv4.load(inv3.serialize());
+  check(inv4.countOf('wood_pickaxe') === 1 && inv4.countOf('bread') === 5, '存档往返：物品保留');
+  check(!!inv4.offhand && inv4.offhand.key === 'torch', '存档往返：副手槽保留');
+  console.log(`  配方 ${RECIPE_COUNT} 条 / 物品 ${ITEM_COUNT} 种\n`);
+}
+
 // 方块表自检
 console.log('【方块表】');
+const total = BLOCK_LIST.length;
 const ids = new Map<number, string>();
-for (let i = 0; i <= 41; i++) {
+for (let i = 0; i < total; i++) {
   const d = blockDef(i);
   check(!!d, `id=${i} 没有对应的方块定义`);
   if (d) check(d.id === i, `id 错位：期望 ${i}，实际 ${d.id}（${d.key}）`);
@@ -147,7 +214,15 @@ for (let i = 0; i <= 41; i++) {
   ids.set(i, d?.key ?? '?');
 }
 check(blockDef(0).key === 'air', '0 号必须是空气');
-console.log(`  已注册 ${ids.size} 种方块，id = 0..41 全部对齐\n`);
+// 每种方块引用的贴图槽位必须真实存在，否则会渲染成空气
+for (const b of BLOCK_LIST) {
+  const keys = typeof b.tiles === 'string' ? [b.tiles] : [b.tiles.top, b.tiles.side, b.tiles.bottom];
+  for (const k of keys) {
+    check(hasTile(k), `方块 ${b.key} 引用了不存在的贴图 ${k}`);
+  }
+}
+console.log(`  已注册 ${ids.size} 种方块，id = 0..${total - 1} 全部对齐`);
+console.log(`  贴图槽位 ${ATLAS_TILES} / ${GRID * GRID} 已使用\n`);
 
 if (failed === 0) {
   console.log('✅ 全部检查通过');

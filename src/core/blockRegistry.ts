@@ -96,6 +96,31 @@ export const Blocks = {
   cloud: def({ key: 'cloud', name: 'Cloud', tiles: 'cloud', color: 0xffffff }),
   portal: def({ key: 'portal', name: 'Portal Stone', tiles: 'portal', light: 0.6, color: 0x7ce8ff }),
   board: def({ key: 'board', name: 'Knowledge Board', tiles: 'board', color: 0x3f2f22 }),
+
+  // ───────── 村庄 / 花草 / 设施 ─────────
+  flowerBlue: def({ key: 'flower_blue', name: 'Blue Flower', tiles: 'flower_blue', solid: false, transparent: true, color: 0x648ef0 }),
+  flowerPink: def({ key: 'flower_pink', name: 'Pink Flower', tiles: 'flower_pink', solid: false, transparent: true, color: 0xf28fc0 }),
+  flowerWhite: def({ key: 'flower_white', name: 'White Flower', tiles: 'flower_white', solid: false, transparent: true, color: 0xf6f6f2 }),
+  tallGrass: def({ key: 'tall_grass', name: 'Tall Grass', tiles: 'tall_grass', solid: false, transparent: true, color: 0x5f9e3f }),
+  hay: def({ key: 'hay', name: 'Hay Bale', tiles: 'hay', color: 0xc9a84c }),
+  craftingTable: def({
+    key: 'crafting_table',
+    name: 'Crafting Table',
+    tiles: { top: 'crafting_table_top', side: 'crafting_table_side', bottom: 'plank' },
+    color: 0xa97c4a,
+  }),
+  furnace: def({
+    key: 'furnace',
+    name: 'Furnace',
+    tiles: { top: 'furnace_side', side: 'furnace_front', bottom: 'furnace_side' },
+    light: 0.25,
+    color: 0x8a8a8a,
+  }),
+  torch: def({ key: 'torch', name: 'Torch', tiles: 'torch', solid: false, transparent: true, light: 0.75, color: 0xffd26a }),
+  glowstone: def({ key: 'glowstone', name: 'Glowstone', tiles: 'glowstone', light: 0.9, color: 0xffefa8 }),
+  bookshelf: def({ key: 'bookshelf', name: 'Bookshelf', tiles: 'bookshelf', color: 0xa97c4a }),
+  bedrock: def({ key: 'bedrock', name: 'Bedrock', tiles: 'bedrock', color: 0x333338 }),
+  carrot: def({ key: 'carrot', name: 'Carrot', tiles: 'carrot', solid: false, transparent: true, color: 0xe88c3a }),
 };
 
 export const BLOCK_LIST = defs;

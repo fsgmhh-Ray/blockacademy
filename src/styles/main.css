@@ -234,6 +234,123 @@ input:focus {
   box-shadow: 0 6px 18px rgba(80, 180, 255, 0.3);
 }
 
+.slot.empty {
+  opacity: 0.45;
+}
+
+.slot .num {
+  position: absolute;
+  right: 3px;
+  top: 2px;
+  font-size: 9px;
+  color: var(--muted);
+}
+
+.slot .n {
+  position: absolute;
+  right: 4px;
+  bottom: 2px;
+  font-size: 11px;
+  font-weight: 700;
+  color: #fff;
+  text-shadow: 0 1px 3px #000, 0 0 2px #000;
+}
+
+/* ───────── 生命 / 饥饿 HUD ───────── */
+#hud-hearts {
+  position: absolute;
+  left: 50%;
+  bottom: 74px;
+  transform: translateX(-50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  pointer-events: none;
+  z-index: 6;
+}
+
+#hearts,
+#hunger {
+  font-size: 14px;
+  line-height: 1;
+  letter-spacing: -1px;
+  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.6);
+}
+
+#hunger {
+  font-size: 11px;
+  opacity: 0.9;
+}
+
+/* ───────── 放屁按钮 ───────── */
+#btn-fart {
+  position: absolute;
+  right: 14px;
+  bottom: 92px;
+  width: 46px;
+  height: 46px;
+  border-radius: 50%;
+  font-size: 20px;
+  background: rgba(20, 28, 42, 0.8);
+  border: 1px solid var(--border);
+  pointer-events: auto;
+  cursor: pointer;
+  z-index: 7;
+}
+
+#btn-fart:hover {
+  background: rgba(120, 170, 90, 0.5);
+}
+
+/* ───────── 好友条 ───────── */
+#friend-bar {
+  position: absolute;
+  left: 12px;
+  top: 52px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  pointer-events: none;
+  z-index: 5;
+}
+
+.friend {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: rgba(20, 28, 42, 0.75);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 3px 8px;
+  font-size: 11px;
+}
+
+.friend small {
+  color: var(--muted);
+}
+
+/* ───────── F3 调试屏（JAVA EDITION） ───────── */
+#f3 {
+  position: absolute;
+  left: 10px;
+  top: 10px;
+  display: none;
+  background: rgba(0, 0, 0, 0.55);
+  color: #d8e6ff;
+  font-family: ui-monospace, Consolas, monospace;
+  font-size: 11px;
+  line-height: 1.55;
+  padding: 8px 10px;
+  border-radius: 6px;
+  pointer-events: none;
+  z-index: 8;
+}
+
+#f3.show {
+  display: block;
+}
+
 /* ───────── 可面板浮层 ───────── */
 #npc-tip {
   position: absolute;
@@ -941,4 +1058,513 @@ input:focus {
 
 .pick.on {
   outline: 2px solid var(--accent);
+}
+
+/* ═══════════════ 版本选择（JAVA / BEDROCK） ═══════════════ */
+.edition-row {
+  display: flex;
+  gap: 12px;
+  justify-content: center;
+  margin: 18px 0 4px;
+  flex-wrap: wrap;
+}
+
+.edition-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  padding: 10px 20px;
+  min-width: 168px;
+  border-radius: 12px;
+  border: 2px solid var(--border);
+  background: rgba(20, 28, 42, 0.85);
+  cursor: pointer;
+  transition: all 0.16s ease;
+  font-family: 'Minecraft', ui-monospace, Consolas, monospace;
+}
+
+.edition-btn b {
+  font-size: 14px;
+  letter-spacing: 1.5px;
+}
+
+.edition-btn small {
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.edition-btn:hover {
+  transform: translateY(-2px);
+  border-color: var(--accent);
+}
+
+.edition-btn.active {
+  border-color: var(--accent);
+  background: rgba(80, 180, 255, 0.16);
+  box-shadow: 0 6px 20px rgba(80, 180, 255, 0.25);
+}
+
+/* ═══════════════ 物品栏 / 合成 ═══════════════ */
+#overlay-inventory .sheet {
+  width: min(880px, 96vw);
+}
+
+#inv-tabs {
+  gap: 6px;
+  margin-bottom: 12px;
+  flex-wrap: wrap;
+}
+
+.tbtn-tab {
+  padding: 7px 14px;
+  font-size: 13px;
+  border-radius: 9px;
+  border: 1px solid var(--border);
+  background: rgba(20, 28, 42, 0.85);
+  cursor: pointer;
+}
+
+.tbtn-tab.active {
+  border-color: var(--accent);
+  background: rgba(80, 180, 255, 0.16);
+  color: #fff;
+}
+
+.inv-wrap {
+  display: flex;
+  gap: 18px;
+  align-items: flex-start;
+  flex-wrap: wrap;
+}
+
+.inv-craft {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.inv-grid {
+  display: grid;
+  grid-template-columns: repeat(var(--cols, 3), 46px);
+  gap: 5px;
+}
+
+.inv-slot {
+  width: 46px;
+  height: 46px;
+  border-radius: 8px;
+  background: rgba(16, 22, 34, 0.9);
+  border: 1px solid var(--border);
+  display: grid;
+  place-items: center;
+  position: relative;
+  cursor: pointer;
+  transition: all 0.12s ease;
+}
+
+.inv-slot:hover {
+  border-color: var(--accent);
+  background: rgba(30, 44, 66, 0.95);
+}
+
+.inv-slot .ic {
+  width: 38px;
+  height: 38px;
+  display: grid;
+  place-items: center;
+  font-size: 24px;
+  line-height: 1;
+}
+
+.inv-slot .ic canvas {
+  width: 34px;
+  height: 34px;
+  image-rendering: pixelated;
+  border-radius: 5px;
+}
+
+.inv-slot .n {
+  position: absolute;
+  right: 3px;
+  bottom: 1px;
+  font-size: 11px;
+  font-weight: 700;
+  color: #fff;
+  text-shadow: 0 1px 3px #000, 0 0 2px #000;
+}
+
+.inv-slot.out {
+  border-color: rgba(126, 227, 154, 0.6);
+  background: rgba(40, 70, 50, 0.7);
+}
+
+.inv-slot.sel {
+  outline: 2px solid var(--accent);
+}
+
+.inv-arrow {
+  font-size: 20px;
+  color: var(--muted);
+}
+
+.inv-off {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+
+.inv-label {
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.inv-note {
+  width: 100%;
+  font-size: 12px;
+  color: var(--muted);
+  line-height: 1.5;
+  margin-top: 8px;
+}
+
+.inv-storage {
+  flex: 1;
+  min-width: 300px;
+}
+
+.inv-storage .inv-grid {
+  grid-template-columns: repeat(9, 40px);
+}
+
+.inv-storage .inv-slot {
+  width: 40px;
+  height: 40px;
+}
+
+.inv-storage .inv-slot .ic {
+  width: 32px;
+  height: 32px;
+  font-size: 20px;
+}
+
+.inv-storage .inv-slot .ic canvas {
+  width: 28px;
+  height: 28px;
+}
+
+.inv-subrow {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 8px;
+  flex-wrap: wrap;
+}
+
+.inv-hotbar-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 14px;
+  flex-wrap: wrap;
+}
+
+.inv-hotbar-row .inv-grid {
+  grid-template-columns: repeat(9, 40px);
+}
+
+.inv-hotbar-row .inv-slot {
+  width: 40px;
+  height: 40px;
+}
+
+.inv-hotbar-row .inv-slot .ic {
+  width: 32px;
+  height: 32px;
+  font-size: 20px;
+}
+
+.inv-hotbar-row .inv-slot .ic canvas {
+  width: 28px;
+  height: 28px;
+}
+
+#inv-cursor {
+  position: fixed;
+  left: 0;
+  top: 0;
+  width: 42px;
+  height: 42px;
+  display: grid;
+  place-items: center;
+  pointer-events: none;
+  z-index: 40;
+  transform: translate(-50%, -50%);
+  filter: drop-shadow(0 3px 5px rgba(0, 0, 0, 0.6));
+}
+
+#inv-cursor canvas {
+  width: 34px;
+  height: 34px;
+  image-rendering: pixelated;
+  border-radius: 5px;
+}
+
+#inv-cursor .n {
+  position: absolute;
+  right: 1px;
+  bottom: 0;
+  font-size: 11px;
+  font-weight: 700;
+  color: #fff;
+  text-shadow: 0 1px 3px #000, 0 0 2px #000;
+}
+
+/* ═══════════════ 暂停菜单 ═══════════════ */
+.sheet.narrow {
+  width: min(430px, 94vw);
+  text-align: center;
+}
+
+.menu-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.menu-list button {
+  padding: 11px 16px;
+  font-size: 14px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: rgba(20, 28, 42, 0.9);
+  cursor: pointer;
+  transition: all 0.14s ease;
+}
+
+.menu-list button:hover {
+  border-color: var(--accent);
+  background: rgba(30, 44, 66, 0.95);
+  transform: translateX(3px);
+}
+
+/* ═══════════════ 聊天记录 ═══════════════ */
+.chatlog {
+  max-height: 52vh;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.log-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 11px;
+  border-radius: 9px;
+  background: rgba(20, 28, 42, 0.75);
+  border: 1px solid var(--border);
+  font-size: 13px;
+}
+
+.log-row.me {
+  background: rgba(80, 140, 220, 0.16);
+  border-color: rgba(80, 180, 255, 0.35);
+}
+
+.log-row .who {
+  min-width: 110px;
+  font-weight: 600;
+  color: var(--accent2, #9fd0ff);
+}
+
+.log-row .tx {
+  flex: 1;
+  line-height: 1.45;
+}
+
+.log-row .at {
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.empty-log {
+  padding: 26px;
+  text-align: center;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+/* ═══════════════ 触屏（BEDROCK EDITION） ═══════════════ */
+#touch-layer {
+  position: absolute;
+  inset: 0;
+  display: none;
+  pointer-events: none;
+  z-index: 5;
+  touch-action: none;
+}
+
+#touch-layer.on {
+  display: block;
+}
+
+#touch-look {
+  position: absolute;
+  inset: 0;
+  pointer-events: auto;
+  touch-action: none;
+}
+
+#touch-stick {
+  position: absolute;
+  left: 22px;
+  bottom: 22px;
+  width: 132px;
+  height: 132px;
+  border-radius: 50%;
+  background: rgba(12, 18, 30, 0.42);
+  border: 2px solid rgba(255, 255, 255, 0.22);
+  pointer-events: auto;
+  touch-action: none;
+}
+
+#touch-knob {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 54px;
+  height: 54px;
+  margin: -27px 0 0 -27px;
+  border-radius: 50%;
+  background: rgba(230, 240, 255, 0.5);
+  border: 2px solid rgba(255, 255, 255, 0.6);
+}
+
+#touch-top {
+  position: absolute;
+  left: 14px;
+  top: 12px;
+  display: flex;
+  gap: 8px;
+  pointer-events: auto;
+}
+
+#touch-btns {
+  position: absolute;
+  right: 16px;
+  bottom: 20px;
+  display: grid;
+  grid-template-columns: repeat(2, 62px);
+  gap: 9px;
+  pointer-events: auto;
+}
+
+.tbtn {
+  width: 62px;
+  height: 62px;
+  border-radius: 50%;
+  font-size: 24px;
+  background: rgba(14, 20, 32, 0.6);
+  border: 2px solid rgba(255, 255, 255, 0.24);
+  color: #fff;
+  touch-action: none;
+  cursor: pointer;
+  user-select: none;
+}
+
+.tbtn.down {
+  background: rgba(80, 180, 255, 0.5);
+  transform: scale(0.94);
+}
+
+.tbtn.round {
+  width: 44px;
+  height: 44px;
+  font-size: 18px;
+}
+
+/* 触屏模式：把界面元素挪开，避免和摇杆/按钮重叠 */
+body.touch-mode #hotbar {
+  bottom: 152px;
+  transform: translateX(-50%) scale(0.92);
+}
+
+body.touch-mode #hud-hearts {
+  bottom: 212px;
+}
+
+body.touch-mode #btn-fart {
+  display: none;
+}
+
+body.touch-mode #quests {
+  display: none;
+}
+
+body.touch-mode #crosshair {
+  width: 16px;
+  height: 16px;
+}
+
+body.touch-mode .sheet {
+  max-height: 74vh;
+}
+
+/* 小屏进一步压缩 */
+@media (max-width: 520px) {
+  .inv-storage .inv-grid,
+  .inv-hotbar-row .inv-grid {
+    grid-template-columns: repeat(9, 32px);
+  }
+
+  .inv-storage .inv-slot,
+  .inv-hotbar-row .inv-slot {
+    width: 32px;
+    height: 32px;
+  }
+
+  .inv-storage .inv-slot .ic,
+  .inv-hotbar-row .inv-slot .ic {
+    width: 26px;
+    height: 26px;
+    font-size: 16px;
+  }
+
+  .inv-storage .inv-slot .ic canvas,
+  .inv-hotbar-row .inv-slot .ic canvas {
+    width: 22px;
+    height: 22px;
+  }
+
+  .inv-grid {
+    grid-template-columns: repeat(var(--cols, 3), 44px);
+  }
+}
+
+@media (max-height: 460px) {
+  #touch-stick {
+    width: 104px;
+    height: 104px;
+    left: 14px;
+    bottom: 14px;
+  }
+
+  #touch-btns {
+    grid-template-columns: repeat(2, 52px);
+    right: 10px;
+    bottom: 12px;
+  }
+
+  .tbtn {
+    width: 52px;
+    height: 52px;
+    font-size: 20px;
+  }
+}
+
+/* 触屏时快捷栏要盖在触控层之上，否则点不到 */
+body.touch-mode #hotbar {
+  z-index: 7;
 }

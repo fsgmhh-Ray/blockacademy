@@ -25,10 +25,30 @@ export interface ProfileMeta {
   createdAt: number;
 }
 
+export interface ChatEntry {
+  /** NPC 的 id，'me' 表示玩家自己说的 */
+  who: string;
+  emoji: string;
+  text: string;
+  me: boolean;
+  at: number;
+}
+
 export interface UserState {
   llm: LLMConfig;
   speech: boolean;
   progress: Progress;
+  /** JAVA = 键鼠，BEDROCK = 触屏 */
+  edition: 'java' | 'bedrock';
+  /** 背包存档 JSON */
+  inventory: string;
+  chatLog: ChatEntry[];
+  /** NPC id -> 好感度 0..3 */
+  friendship: Record<string, number>;
+  /** 成就 id -> 达成时间戳 */
+  achievements: Record<string, number>;
+  sound: boolean;
+  volume: number;
 }
 
 const INDEX_KEY = 'blockacademy.users';
@@ -63,27 +83,62 @@ function saveIndex(i: Index): void {
   localStorage.setItem(INDEX_KEY, JSON.stringify(i));
 }
 
+function defaultState(): UserState {
+  return {
+    llm: defaultLLM(),
+    speech: false,
+    progress: emptyProgress(),
+    edition: 'java',
+    inventory: '',
+    chatLog: [],
+    friendship: {},
+    achievements: {},
+    sound: true,
+    volume: 0.55,
+  };
+}
+
 function loadState(id: string): UserState {
+  const base = defaultState();
   try {
     const raw = localStorage.getItem(STATE_PREFIX + id);
     if (raw) {
       const s = JSON.parse(raw);
       return {
-        llm: { ...defaultLLM(), ...(s.llm || {}) },
-        speech: !!s.speech,
-        progress: { ...emptyProgress(), ...(s.progress || {}) },
+        llm: { ...base.llm, ...(s.llm || {}) },
+        speech: base.speech || !!s.speech,
+        progress: { ...base.progress, ...(s.progress || {}) },
+        edition: s.edition === 'bedrock' ? 'bedrock' : 'java',
+        inventory: typeof s.inventory === 'string' ? s.inventory : '',
+        chatLog: Array.isArray(s.chatLog) ? s.chatLog : [],
+        friendship: s.friendship && typeof s.friendship === 'object' ? s.friendship : {},
+        achievements: s.achievements && typeof s.achievements === 'object' ? s.achievements : {},
+        sound: s.sound === undefined ? true : !!s.sound,
+        volume: typeof s.volume === 'number' ? s.volume : 0.55,
       };
     }
   } catch {
     /* ignore */
   }
-  return { llm: defaultLLM(), speech: false, progress: emptyProgress() };
+  return base;
 }
 
 function saveState(id: string, s: UserState): void {
   localStorage.setItem(
     STATE_PREFIX + id,
-    JSON.stringify({ llm: s.llm, speech: s.speech, progress: s.progress }),
+    JSON.stringify({
+      llm: s.llm,
+      speech: s.speech,
+      progress: s.progress,
+      edition: s.edition,
+      inventory: s.inventory,
+      // 聊天记录只留最近 300 条，避免 localStorage 爆掉
+      chatLog: s.chatLog.slice(-300),
+      friendship: s.friendship,
+      achievements: s.achievements,
+      sound: s.sound,
+      volume: s.volume,
+    }),
   );
 }
 
@@ -113,7 +168,7 @@ function migrate(): Index {
     color: '#5ad1c9',
     createdAt: Date.now(),
   };
-  saveState(meta.id, { llm: legacyLLM, speech: legacySpeech, progress: legacyProgress });
+  saveState(meta.id, { ...defaultState(), llm: legacyLLM, speech: legacySpeech, progress: legacyProgress });
   // drop legacy keys so they can't drift out of sync
   localStorage.removeItem('blockacademy.llm');
   localStorage.removeItem('blockacademy.voice');
@@ -156,7 +211,7 @@ export function createProfile(name: string, avatar: string, color: string): Prof
     createdAt: Date.now(),
   };
   idx.list.push(meta);
-  saveState(meta.id, { llm: defaultLLM(), speech: false, progress: emptyProgress() });
+  saveState(meta.id, defaultState());
   idx.activeId = meta.id;
   saveIndex(idx);
   return meta;

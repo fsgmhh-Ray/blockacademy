@@ -3,13 +3,23 @@ import * as THREE from 'three';
 import { World } from './core/world';
 import { Player } from './core/player';
 import { Input } from './core/input';
+import { Sky } from './core/sky';
+import { ViewModel } from './core/viewmodel';
+import { TouchControls } from './core/touch';
+import { sfx } from './core/sfx';
 import { blockDef, BLOCK_LIST } from './core/blockRegistry';
-import { blocks, HOTBAR as HOTBAR_DEF, BLOCK_NAMES } from './world/blockIds';
+import { blocks, BLOCK_NAMES } from './world/blockIds';
+import { MobManager, type Mob, type MobKind } from './mob/mobs';
+import { Inventory, type Slot } from './craft/inventory';
+import { item, breakDrop, keyOfBlock, hasItem, blockItems, type ItemDef } from './craft/items';
+import type { InvTarget, PauseAction } from './ui/ui';
+import type { Tab } from './craft/inventory';
+import type { VoxelHit } from './core/world';
 import { SCENES, SCENE_BY_ID, type SceneDef, type Pad } from './world/scenes';
 import { NPCActor, stopSpeaking } from './npc/npcActor';
 import { BY_ID, PERSONALITIES } from './npc/personalities';
 import { loadLLMConfig, saveLLMConfig, type LLMConfig, type SceneContext } from './npc/brain';
-import { UI, type HotbarItem } from './ui/ui';
+import { UI } from './ui/ui';
 import { ShowcasePlayer } from './ui/showcase';
 import { setSpeechEnabled, initSpeech } from './ui/speech';
 import {
@@ -21,6 +31,7 @@ import {
   deleteProfile as deleteUserProfile,
   saveActive,
   type ProfileMeta,
+  type ChatEntry,
 } from './user/profile';
 import {
   bump,
@@ -46,8 +57,15 @@ class Game {
 
   hemi = new THREE.HemisphereLight(0xffffff, 0x404860, 0.8);
   sun = new THREE.DirectionalLight(0xffffff, 0.9);
-  starField: THREE.Points | null = null;
+  sky = new Sky();
+  mobs = new MobManager();
+  vm = new ViewModel();
+  inv = new Inventory();
+  touch!: TouchControls;
   highlight: THREE.LineSegments;
+  /** 破坏方块时的碎屑粒子 */
+  private particles: THREE.Points | null = null;
+  private pData: { p: THREE.Vector3; v: THREE.Vector3; life: number; c: THREE.Color }[] = [];
 
   npcs: NPCActor[] = [];
   sceneDef: SceneDef = SCENES[0];
@@ -56,6 +74,33 @@ class Game {
   llm: LLMConfig = loadLLMConfig();
   userMeta: ProfileMeta = getActiveState().meta;
   hotbarIndex = 0;
+
+  // ───────── 生存要素 ─────────
+  health = 100;
+  readonly maxHealth = 100;
+  hunger = 100;
+  private fallFrom = 0;
+  private wasOnGround = true;
+  private hurtCd = 0;
+  private regenT = 0;
+  private stepT = 0;
+  private fartCd = 0;
+  private swingCd = 0;
+  private mineT = 0;
+  private mineKey = '';
+
+  // ───────── 版本 / 显示 ─────────
+  /** JAVA = 键鼠，BEDROCK = 触屏 */
+  edition: 'java' | 'bedrock' = 'java';
+  private f3On = false;
+  private cycleOn = false;
+  private soundOn = true;
+  soundVolume = 0.55;
+
+  // ───────── 社交与记录 ─────────
+  friendship: Record<string, number> = {};
+  chatLog: ChatEntry[] = [];
+  achievements: Record<string, number> = {};
 
   /** 《我的世界》风格游戏模式：survival 生存 / creative 创造 / adventure 冒险 / spectator 旁观 */
   gameMode: 'survival' | 'creative' | 'adventure' | 'spectator' = 'creative';
@@ -69,7 +114,6 @@ class Game {
   private nearPad: Pad | null = null;
   private npcCooldown = 0;
 
-  private hotbar: HotbarItem[] = [];
   private consoleOpen = false;
   private seed = Math.floor(Math.random() * 1_000_000_000);
   private rain: THREE.Points | null = null;
@@ -78,10 +122,17 @@ class Game {
   private sceneHasStars = false;
   private playerLight: THREE.PointLight;
 
+  private readonly canvas: HTMLCanvasElement;
+  private isTouch = false;
+
   constructor(canvas: HTMLCanvasElement, uiRoot: HTMLElement) {
-    initSpeech(getActiveState().state.speech);
-    this.renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' });
-    this.renderer.setPixelRatio(Math.min(devicePixelRatio, 1.6));
+    const boot = getActiveState();
+    initSpeech(boot.state.speech);
+    this.canvas = canvas;
+    this.isTouch = matchMedia('(pointer: coarse)').matches || navigator.maxTouchPoints > 0;
+    this.renderer = new THREE.WebGLRenderer({ canvas, antialias: !this.isTouch, powerPreference: 'high-performance' });
+    // 手机上限制像素比，帧率优先
+    this.renderer.setPixelRatio(Math.min(devicePixelRatio, this.isTouch ? 1 : 1.6));
     this.renderer.setSize(innerWidth, innerHeight);
 
     this.input = new Input(canvas);
@@ -102,7 +153,43 @@ class Game {
       onPlayDemo: (id) => this.playDemo(id),
       onCommand: (raw) => this.handleCommand(raw),
       onConsoleClose: () => this.closeConsole(),
+      onInvClick: (t, i) => this.onInvClick(t, i),
+      onInvTab: (t) => this.onInvTab(t),
+      onFart: () => this.fart(),
+      onPause: (a) => this.onPauseAction(a),
+      onChatlogClear: () => this.clearChatLog(),
+      onEdition: (e) => this.setEdition(e),
+      onGift: () => this.giveGift(),
+      onEat: () => this.eatHeld(),
     });
+
+    this.touch = new TouchControls(uiRoot, this.input, (a) => this.onTouchAction(a));
+    this.sky.attach(this.scene);
+    this.mobs.attach(this.scene);
+    this.vm.setSleeve(boot.meta.color);
+
+    // 载入玩家存档（版本 / 背包 / 聊天 / 好感 / 成就）
+    const st = boot.state;
+    this.edition = st.edition ?? (this.isTouch ? 'bedrock' : 'java');
+    if (st.inventory) this.inv.load(st.inventory);
+    this.chatLog = st.chatLog ?? [];
+    this.friendship = st.friendship ?? {};
+    this.achievements = st.achievements ?? {};
+    this.soundOn = st.sound;
+    this.soundVolume = st.volume;
+    sfx.setEnabled(this.soundOn);
+    sfx.setVolume(this.soundVolume);
+
+    // 浏览器要求：音频必须在一次真实手势里解锁
+    const unlock = () => {
+      sfx.unlock();
+      if (this.soundOn) sfx.play('click');
+    };
+    window.addEventListener('pointerdown', unlock, { once: true });
+    window.addEventListener('keydown', unlock, { once: true });
+
+    // 崩落的方块碎屑
+    this.buildParticles();
 
     this.scene.add(this.world.group, this.hemi, this.sun);
     this.sun.position.set(60, 120, 40);
@@ -112,8 +199,6 @@ class Game {
     this.playerLight = new THREE.PointLight(0xfff2d6, 0.0, 22, 1.4);
     this.scene.add(this.playerLight);
 
-    this.hotbar = HOTBAR_DEF.map((h) => ({ id: h.id, name: h.name, tile: this.tileOf(h.id) }));
-    this.ui.setHotbarItems(this.hotbar);
 
     const edges = new THREE.EdgesGeometry(new THREE.BoxGeometry(1.003, 1.003, 1.003));
     this.highlight = new THREE.LineSegments(edges, new THREE.LineBasicMaterial({ color: 0x0a0a0a, transparent: true, opacity: 0.65 }));
@@ -152,19 +237,98 @@ class Game {
     this.ui.setSettingsPlayer(this.userMeta);
     this.ui.fillSettings(this.llm);
     this.ui.loadingDone();
+    // 版本：第一次进游戏按设备自动选，之后用玩家存的
+    const saved = getActiveState().state;
+    const ed = saved.edition ?? (this.isTouch ? 'bedrock' : 'java');
+    this.setEdition(ed);
+    // 选中的版本按钮高亮
+    const btn = document.querySelector(`.edition-btn[data-ed="${ed}"]`);
+    document.querySelectorAll('.edition-btn').forEach((b) => b.classList.remove('active'));
+    btn?.classList.add('active');
+    // 创造模式送一套起步方块，生存模式背包空空如也
+    if (this.gameMode === 'creative' && !this.inv.slots.some((s) => s)) this.giveStarterKit();
+    this.refreshHud();
+    this.populateMobs();
     if (location.search.includes('autoplay')) this.start();
     this.loop();
+  }
+
+  private giveStarterKit(): void {
+    const kit: string[] = ['grass', 'plank', 'stone_brick', 'brick', 'glass', 'lamp', 'wood', 'crafting_table', 'torch'];
+    kit.forEach((k, i) => {
+      this.inv.slots[i] = { key: k, count: 1 };
+    });
   }
 
   start(): void {
     this.ui.hideTitle();
     this.mode = 'play';
-    this.input.requestLock();
+    if (this.edition === 'java') this.input.requestLock();
     if (!this.progress.chatTurns) {
       setTimeout(() => this.playDemo('intro'), 300);
     } else {
       this.ui.toast('Welcome back! Press H for controls, M for the map', 'info', 5000);
     }
+  }
+
+  // ───────── 生物 ─────────
+  private populateMobs(): void {
+    this.mobs.clear();
+    const [sx, sz] = this.sceneDef.spawn;
+    const table: Record<string, MobKind[]> = {
+      village: ['cow', 'pig', 'sheep', 'chicken', 'dog', 'cat'],
+      forest: ['pig', 'sheep', 'chicken', 'slime'],
+      river: ['chicken', 'pig', 'sheep'],
+      cave: ['slime'],
+      observatory: ['cat'],
+      lab: ['slime'],
+    };
+    const kinds = table[this.sceneDef.id] ?? ['chicken'];
+    this.mobs.populate(kinds, this.world, sx, sz, this.isTouch ? 6 : 10);
+  }
+
+  /** 空手 / 拿着食物跟动物互动 */
+  private interactMob(): boolean {
+    const p = this.player.position;
+    const m = this.mobs.nearest(p, this.player.forwardVector(), 3.0);
+    if (!m) return false;
+    const slot = this.heldSlot();
+    const want = m.def.tameFood;
+    if (slot && want && slot.key === want) {
+      if (slot.count <= 1) this.inv.slots[this.hotbarIndex] = null;
+      else slot.count -= 1;
+      m.friendship++;
+      sfx.play(m.def.sound);
+      this.burst(m.position.x, m.position.y + 1, m.position.z, 0xffd27a, 6, 1.2);
+      if (m.friendship >= 3 && !m.pet) {
+        m.pet = true;
+        sfx.play('levelup');
+        this.ui.toast(`${m.def.icon} ${m.def.cn} is now your pet!`, 'good', 3800);
+        this.unlock('pet', '🐾 You tamed a pet!');
+      } else {
+        this.ui.toast(`${m.def.icon} ${m.def.cn} liked the ${item(slot.key).cn}! (${m.friendship}/3)`, 'good', 2600);
+      }
+      this.refreshHud();
+      this.saveAll();
+      return true;
+    }
+    // 空手互动：收产品（有冷却）
+    if (!slot && m.def.gift) {
+      const now = performance.now();
+      if (now - m.lastGift > 25000) {
+        m.lastGift = now;
+        this.collect(m.def.gift, 1);
+        sfx.play(m.def.sound);
+        this.ui.toast(`${m.def.icon} Got ${item(m.def.gift).name}!`, 'good', 2600);
+        this.unlock('farm', '🥚 Your first farm product!');
+        return true;
+      }
+      this.ui.toast(`${m.def.icon} ${m.def.cn} needs a little rest…`, 'info', 2200);
+      return true;
+    }
+    sfx.play(m.def.sound);
+    this.ui.toast(`${m.def.icon} ${m.def.cn} says hi!`, 'info', 2000);
+    return true;
   }
 
   // ───────── 场景构建 ─────────
@@ -197,6 +361,7 @@ class Game {
     this.player.teleport(scene.spawn[0] + 0.5, spawnY + 0.6, scene.spawn[1] + 0.5);
     this.player.velocity.set(0, 0, 0);
 
+    this.populateMobs();
     this.ui.setScene(scene, this.doneScenes.size);
     this.ui.renderQuests(scene.id, this.progress);
     if (!silent) this.ui.toast(`${scene.icon} ${scene.name} · ${scene.subtitle}`, 'info', 4200);
@@ -213,27 +378,10 @@ class Game {
     this.timeNorm = 0;
     // A gentle light that follows the player so dark scenes stay playable
     this.playerLight.intensity = scene.ambient < 0.6 ? 1.0 : 0;
-    if (scene.stars) {
-      if (!this.starField) {
-        const n = 900;
-        const g = new THREE.BufferGeometry();
-        const arr = new Float32Array(n * 3);
-        for (let i = 0; i < n; i++) {
-          const a = Math.random() * Math.PI * 2;
-          const b = Math.random() * Math.PI * 0.45;
-          const r = 240;
-          arr[i * 3] = Math.cos(a) * Math.sin(b + 0.2) * r;
-          arr[i * 3 + 1] = Math.cos(b) * r;
-          arr[i * 3 + 2] = Math.sin(a) * Math.sin(b + 0.2) * r;
-        }
-        g.setAttribute('position', new THREE.Float32BufferAttribute(arr, 3));
-        this.starField = new THREE.Points(g, new THREE.PointsMaterial({ color: 0xffffff, size: 1.6, sizeAttenuation: false }));
-        this.starField.frustumCulled = false;
-      }
-      this.scene.add(this.starField);
-    } else if (this.starField) {
-      this.scene.remove(this.starField);
-    }
+    // 天空：洞穴之类的室内场景没有天空，其他场景按场景默认时间摆放日月
+    const indoor = scene.id === 'cave';
+    this.sky.setEnabled(!indoor);
+    this.setTimeOfDay(scene.night ? 0.78 : 0.08);
   }
 
   private clearNpcs(): void {
@@ -411,6 +559,8 @@ class Game {
       this.ui.setEngineTag(res.engine === 'llm' ? 'LLM' : 'Local engine');
     }
     this.ui.busy(false);
+    // 聊天记录存档（玩家说的 + 村民回的）
+    this.logChat(npc.personality.name, npc.personality.emoji, res.text, false);
     this.progress.chatTurns++;
     if (!isGreet) {
       this.bumpQuest((q) => q.kind === 'talk' && q.target === npc.personality.id);
@@ -421,9 +571,11 @@ class Game {
   }
 
   private ask(text: string): void {
-    if (!this.activeNpc) return;
+    const npc = this.activeNpc;
+    if (!npc) return;
     this.ui.bubble('me', text);
-    void this.runTalk(this.activeNpc, text);
+    this.logChat('You', this.userMeta.avatar, text, true);
+    void this.runTalk(npc, text);
   }
 
   // ───────── 设置 ─────────
@@ -532,15 +684,10 @@ class Game {
 
   private setHotbar(i: number): void {
     this.hotbarIndex = i;
-    this.ui.setHotbarIndex(i);
+    this.refreshHud();
   }
 
   // ───────── command console ─────────
-  private tileOf(id: number): string {
-    const d = blockDef(id);
-    return typeof d.tiles === 'string' ? d.tiles : d.tiles.top;
-  }
-
   private openConsole(): void {
     if (this.mode !== 'play') return;
     this.consoleOpen = true;
@@ -607,7 +754,11 @@ class Game {
         out('【Chat】    /say <text>   /me <text>   /title <text>   /tellraw <text>   /stopsound', 'sys');
         out('【Info】    /list [scenes|npcs|players|blocks]   /seed      /summon <npc>', 'sys');
         out('【Life】    /kill (respawn)   /spawnpoint [x y z]   /setworldspawn [x y z]', 'sys');
+        out('           /heal   /feed   /craft (inventory)   /bag   /fart   /pets   /mobs', 'sys');
+        out('【Fun】     /cycle on|off (day-night)   /sound on|off   /volume <0-100>', 'sys');
+        out('           /edition java|bedrock', 'sys');
         out('Coordinates support MC-style ~ : e.g. /tp ~ ~10 ~   /setblock ~ ~1 ~ lamp', 'sys');
+        out('Keys: E inventory · I inventory · G fart · C left hand · F3 debug (Java) · ESC menu', 'sys');
         return;
       case 'tp':
       case 'teleport': {
@@ -626,19 +777,14 @@ class Game {
         return out(`Teleported to ${scene.icon} ${scene.name}`, 'ok');
       }
       case 'give': {
+        // 先按方块名找，找不到再按物品名找（工具、食物、资源都能给）
         const id = this.blockFromName(args[0] ?? '');
-        if (id === null) return out(`Unknown block "${args[0]}". Try a name like stone, glass, lamp`, 'err');
-        const count = Math.max(1, Math.min(9999, num(args[1]) ?? 64));
-        const existing = this.hotbar.findIndex((h) => h.id === id);
-        if (existing >= 0) {
-          this.setHotbar(existing);
-        } else {
-          if (this.hotbar.length >= 18) return out('Hotbar is full (max 18 slots)', 'err');
-          this.hotbar.push({ id, name: blockDef(id).name, tile: this.tileOf(id) });
-          this.ui.setHotbarItems(this.hotbar);
-          this.setHotbar(this.hotbar.length - 1);
-        }
-        return out(`Gave you ${count} × ${blockDef(id).name}`, 'ok');
+        const key = id !== null ? keyOfBlock(id) : hasItem(args[0] ?? '') ? (args[0] as string) : null;
+        if (!key) return out(`Unknown item "${args[0]}". Try stone, glass, bread, wood_pickaxe`, 'err');
+        const count = Math.max(1, Math.min(9999, num(args[1]) ?? 1));
+        const left = this.inv.add(key, count);
+        this.refreshHud();
+        return out(`Gave you ${count - left} × ${item(key).name}${left ? ' (bag full!)' : ''}`, 'ok');
       }
       case 'setblock': {
         const x = cd(args[0], bx);
@@ -753,9 +899,7 @@ class Game {
         return out(`Summoned ${found.emoji} ${found.name} at (${px}, ${y}, ${pz})`, 'ok');
       }
       case 'clear': {
-        this.hotbar = HOTBAR_DEF.map((h) => ({ id: h.id, name: h.name, tile: this.tileOf(h.id) }));
-        this.ui.setHotbarItems(this.hotbar);
-        this.setHotbar(0);
+        this.refreshHud();
         return out('Hotbar reset to the default set', 'ok');
       }
       case 'stopsound':
@@ -839,36 +983,71 @@ class Game {
         this.setWeather(w === 'rain');
         return out(`Weather: ${w}`, 'ok');
       }
+      case 'fart':
+        this.fart();
+        return out('💨 Pffffft! (key: G)', 'me');
+      case 'heal':
+        this.health = this.maxHealth;
+        this.ui.setStats(this.health, this.maxHealth, this.hunger);
+        return out('Health restored', 'ok');
+      case 'feed':
+        this.hunger = 100;
+        this.ui.setStats(this.health, this.maxHealth, this.hunger);
+        return out('You are full', 'ok');
+      case 'sound': {
+        const v = (args[0] ?? '').toLowerCase();
+        if (v !== 'on' && v !== 'off') return out('Usage: /sound on|off', 'err');
+        this.soundOn = v === 'on';
+        sfx.setEnabled(this.soundOn);
+        this.saveAll();
+        return out(`Sound ${v}`, 'ok');
+      }
+      case 'volume': {
+        const n = num(args[0]);
+        if (n === null) return out('Usage: /volume <0-100>', 'err');
+        this.soundVolume = Math.max(0, Math.min(100, n)) / 100;
+        sfx.setVolume(this.soundVolume);
+        this.saveAll();
+        return out(`Volume ${n}%`, 'ok');
+      }
+      case 'edition': {
+        const v = (args[0] ?? '').toLowerCase();
+        if (v !== 'java' && v !== 'bedrock') return out('Usage: /edition java|bedrock', 'err');
+        this.setEdition(v);
+        return out(v === 'bedrock' ? '📱 BEDROCK EDITION (touch)' : '🖥️ JAVA EDITION (keyboard & mouse)', 'ok');
+      }
+      case 'craft':
+      case 'bag':
+        this.openInventory();
+        return out('Inventory opened', 'ok');
+      case 'cycle': {
+        const v = (args[0] ?? '').toLowerCase();
+        if (v !== 'on' && v !== 'off') return out('Usage: /cycle on|off (day-night cycle)', 'err');
+        this.cycleOn = v === 'on';
+        return out(`Day-night cycle ${v}`, 'ok');
+      }
+      case 'mobs': {
+        const kinds = new Map<string, number>();
+        for (const m of this.mobs.mobs) kinds.set(m.def.cn, (kinds.get(m.def.cn) ?? 0) + 1);
+        if (!kinds.size) return out('No mobs nearby', 'sys');
+        for (const [k, n] of kinds) out(`${k} × ${n}`, 'sys');
+        return;
+      }
+      case 'pets': {
+        const pets = this.mobs.mobs.filter((m) => m.pet);
+        if (!pets.length) return out('No pets yet — feed an animal 3 times!', 'sys');
+        for (const m of pets) out(`${m.def.icon} ${m.def.cn}`, 'sys');
+        return;
+      }
       default:
         return out(`Unknown command "/${cmd}". Type /help`, 'err');
     }
   }
 
-  private ensureStars(): void {
-    if (this.starField) {
-      if (!this.scene.children.includes(this.starField)) this.scene.add(this.starField);
-      return;
-    }
-    const n = 900;
-    const g = new THREE.BufferGeometry();
-    const arr = new Float32Array(n * 3);
-    for (let i = 0; i < n; i++) {
-      const a = Math.random() * Math.PI * 2;
-      const b = Math.random() * Math.PI * 0.45;
-      const r = 240;
-      arr[i * 3] = Math.cos(a) * Math.sin(b + 0.2) * r;
-      arr[i * 3 + 1] = Math.cos(b) * r;
-      arr[i * 3 + 2] = Math.sin(a) * Math.sin(b + 0.2) * r;
-    }
-    g.setAttribute('position', new THREE.Float32BufferAttribute(arr, 3));
-    this.starField = new THREE.Points(g, new THREE.PointsMaterial({ color: 0xffffff, size: 1.6, sizeAttenuation: false }));
-    this.starField.frustumCulled = false;
-    this.scene.add(this.starField);
-  }
-
   private setTimeOfDay(norm: number): void {
     norm = Math.max(0, Math.min(1, norm));
     this.timeNorm = norm;
+    this.sky.setTime(norm);
     const day = new THREE.Color(0x9ecbff);
     const night = new THREE.Color(0x070a16);
     const sky = day.clone().lerp(night, norm);
@@ -878,8 +1057,10 @@ class Game {
     this.hemi.color.setHex(norm > 0.5 ? 0x384a70 : 0xffffff);
     this.sun.intensity = 1.0 - 0.95 * norm;
     this.playerLight.intensity = norm > 0.5 ? 0.7 : this.sceneDef.ambient < 0.6 ? 1.0 : 0;
-    if (norm > 0.5) this.ensureStars();
-    else if (this.starField && !this.sceneHasStars) this.scene.remove(this.starField);
+  }
+
+  private get isNight(): boolean {
+    return this.timeNorm > 0.62;
   }
 
   private buildRain(): void {
@@ -924,7 +1105,7 @@ class Game {
   }
 
   // ───────── 世界交互 ─────────
-  private updateHighlight(): { x: number; y: number; z: number } | null {
+  private updateHighlight(): VoxelHit | null {
     const hit = this.world.raycast(
       this.player.position.x,
       this.player.position.y + 1.62,
@@ -935,9 +1116,11 @@ class Game {
     if (hit) {
       this.highlight.visible = true;
       this.highlight.position.set(hit.x + 0.5, hit.y + 0.5, hit.z + 0.5);
+      this.hitResult = hit;
       return hit;
     }
     this.highlight.visible = false;
+    this.hitResult = null;
     return null;
   }
 
@@ -968,42 +1151,767 @@ class Game {
     return `Game mode set to ${label}`;
   }
 
-  private doEdit(): void {
-    if (!this.canEdit) return;
-    const hit = this.world.raycast(
-      this.player.position.x,
-      this.player.position.y + 1.62,
-      this.player.position.z,
-      ...this.dirTuple(),
-      6,
+  // ───────── 粒子：破坏碎屑 / 放屁 / 打怪 ─────────
+  private buildParticles(): void {
+    const n = 240;
+    const g = new THREE.BufferGeometry();
+    g.setAttribute('position', new THREE.Float32BufferAttribute(new Float32Array(n * 3), 3));
+    g.setAttribute('color', new THREE.Float32BufferAttribute(new Float32Array(n * 3), 3));
+    this.particles = new THREE.Points(
+      g,
+      new THREE.PointsMaterial({ size: 0.17, vertexColors: true, transparent: true, opacity: 0.95, depthWrite: false }),
     );
-    const placeId = this.hotbar[this.hotbarIndex].id;
-    if (this.input.takeClick(0)) {
-      if (hit && hit.y > 1) {
-        this.world.set(hit.x, hit.y, hit.z, 0);
-      }
-    }
-    if (this.input.takeClick(2)) {
-      if (hit) {
-        const x = hit.x + hit.nx;
-        const y = hit.y + hit.ny;
-        const z = hit.z + hit.nz;
-        const px = this.player.position;
-        const overlap =
-          x + 1 > px.x - 0.34 && x < px.x + 0.34 && z + 1 > px.z - 0.34 && z < px.z + 0.34 && y + 1 > px.y && y < px.y + 1.8;
-        if (!overlap && y > 0) {
-          this.world.set(x, y, z, placeId);
-          this.bumpQuest((q) => q.kind === 'build');
-        }
-      }
+    this.particles.frustumCulled = false;
+    this.particles.visible = false;
+    this.scene.add(this.particles);
+  }
+
+  private burst(x: number, y: number, z: number, color: number, count = 10, spread = 2.2): void {
+    const c = new THREE.Color(color);
+    for (let i = 0; i < count; i++) {
+      if (this.pData.length >= 240) this.pData.shift();
+      this.pData.push({
+        p: new THREE.Vector3(x, y, z),
+        v: new THREE.Vector3(
+          (Math.random() - 0.5) * spread,
+          Math.random() * spread * 0.7 + 0.5,
+          (Math.random() - 0.5) * spread,
+        ),
+        life: 0.6 + Math.random() * 0.6,
+        c,
+      });
     }
   }
+
+  private updateParticles(dt: number): void {
+    if (!this.particles) return;
+    let n = 0;
+    for (let i = this.pData.length - 1; i >= 0; i--) {
+      const d = this.pData[i];
+      d.life -= dt;
+      if (d.life <= 0) {
+        this.pData.splice(i, 1);
+        continue;
+      }
+      d.v.y -= 8 * dt;
+      d.p.addScaledVector(d.v, dt);
+    }
+    const pos = this.particles.geometry.getAttribute('position') as THREE.BufferAttribute;
+    const col = this.particles.geometry.getAttribute('color') as THREE.BufferAttribute;
+    for (const d of this.pData) {
+      pos.setXYZ(n, d.p.x, d.p.y, d.p.z);
+      col.setXYZ(n, d.c.r, d.c.g, d.c.b);
+      n++;
+    }
+    pos.needsUpdate = true;
+    col.needsUpdate = true;
+    this.particles.geometry.setDrawRange(0, n);
+    this.particles.visible = n > 0;
+  }
+
+  // ───────── 背包与手持 ─────────
+  private heldSlot(): Slot | null {
+    return this.inv.slots[this.hotbarIndex];
+  }
+  private heldItem(): ItemDef | null {
+    const s = this.heldSlot();
+    return s ? item(s.key) : null;
+  }
+
+  private refreshHud(): void {
+    this.ui.renderHotbar(this.inv, this.hotbarIndex);
+    this.vm.setRight(this.heldSlot()?.key ?? null);
+    this.vm.setLeft(this.inv.offhand?.key ?? null);
+    this.ui.setStats(this.health, this.maxHealth, this.hunger);
+  }
+
+  /** 获得物品，背包满了会提示 */
+  private collect(key: string, n = 1): void {
+    const left = this.inv.add(key, n);
+    if (left > 0) this.ui.toast(`🎒 Bag full — dropped ${item(key).name}`, 'warn', 2600);
+    else sfx.play('xp');
+  }
+
+  // ───────── 挖掘 / 放置 ─────────
+  private breakBlock(x: number, y: number, z: number): void {
+    const id = this.world.get(x, y, z);
+    if (id === 0) return;
+    const d = blockDef(id);
+    if (id === blocks.bedrock) {
+      this.ui.toast('🛡 Bedrock cannot be broken!', 'warn', 2200);
+      return;
+    }
+    this.world.set(x, y, z, 0);
+    this.burst(x + 0.5, y + 0.5, z + 0.5, d.color, 12, 2.4);
+    sfx.play('break');
+    if (this.gameMode !== 'creative') {
+      for (const k of breakDrop(id)) this.collect(k, 1);
+      this.unlock('mine', '⛏ First block broken!');
+    }
+    this.bumpQuest((q) => q.kind === 'build');
+  }
+
+  private swingT = 0;
+  private placeCd = 0;
+  private hitResult: VoxelHit | null = null;
+
+  private doMine(dt: number): void {
+    const hit = this.updateHighlight();
+    const click = this.input.takeClick(0);
+    const held = this.input.mouseHeld(0);
+
+    // 准星对着怪 → 先打怪
+    if (click || (held && this.swingCd <= 0)) {
+      const p = this.player.position;
+      const foe = this.mobs.nearestHostile(p, this.player.forwardVector());
+      if (foe && this.swingCd <= 0) {
+        this.swingCd = 0.4;
+        const it = this.heldItem();
+        const dmg = it?.tool === 'sword' ? 4 + (it.tier ?? 0) * 2 : 2;
+        this.vm.swingRight();
+        this.mobs.strike(p, this.player.forwardVector(), dmg);
+        sfx.play('pop');
+        this.burst(foe.position.x, foe.position.y + 0.9, foe.position.z, 0x7a5cff, 10, 1.8);
+        this.unlock('fight', '⚔️ You stood up to a Shadow!');
+        if (!held) return;
+      }
+    }
+    this.swingCd -= dt;
+
+    if (!hit || !this.canEdit) {
+      this.mineT = 0;
+      return;
+    }
+    if (!click && !held) {
+      this.mineT = 0;
+      return;
+    }
+    const it = this.heldItem();
+    let speed = 1;
+    if (it?.tool && it.tool !== 'sword' && it.tool !== 'hoe') speed = 1.5 + (it.tier ?? 0) * 0.95;
+    const need = this.gameMode === 'creative' ? 0.02 : 0.62 / speed;
+
+    this.swingT -= dt;
+    if (this.swingT <= 0) {
+      this.swingT = 0.28;
+      this.vm.swingRight();
+      sfx.play('mine', Math.floor(Math.random() * 3));
+    }
+    this.mineT += dt;
+    if (this.mineT >= need) {
+      this.breakBlock(hit.x, hit.y, hit.z);
+      this.mineT = 0;
+    }
+  }
+
+  private doPlace(dt: number): void {
+    const hit = this.hitResult;
+    this.placeCd -= dt;
+    if (!hit || !this.canEdit || this.placeCd > 0) return;
+    const click = this.input.takeClick(2);
+    const held = this.input.mouseHeld(2);
+    if (!click && !held) return;
+    const slot = this.heldSlot();
+    if (!slot) return;
+    const it = item(slot.key);
+    if (it.block === undefined) {
+      if (click) this.ui.toast(`${it.icon} ${it.name} can't be placed — put it in your ${'bag'} first`, 'warn', 2200);
+      return;
+    }
+    const x = hit.x + hit.nx;
+    const y = hit.y + hit.ny;
+    const z = hit.z + hit.nz;
+    const px = this.player.position;
+    const overlap =
+      x + 1 > px.x - 0.34 && x < px.x + 0.34 && z + 1 > px.z - 0.34 && z < px.z + 0.34 && y + 1 > px.y && y < px.y + 1.8;
+    if (overlap || y < 1) return;
+    if (this.gameMode !== 'creative') {
+      if (slot.count <= 1) this.inv.slots[this.hotbarIndex] = null;
+      else slot.count -= 1;
+    }
+    this.world.set(x, y, z, it.block);
+    this.placeCd = 0.2;
+    this.vm.swingRight();
+    sfx.play('place');
+    this.bumpQuest((q) => q.kind === 'build');
+    this.refreshHud();
+    // 好感满的村民会帮你一起搭
+    this.villagerHelpsBuild(x, y, z);
+  }
+
+  /** 跟着你的村民会在旁边添一块，跟你一起盖房子 */
+  private villagerHelpsBuild(x: number, y: number, z: number): void {
+    if (!this.followers.size) return;
+    const helper = this.npcs.find((n) => this.followers.has(n.personality.id));
+    if (!helper) return;
+    if (helper.position.distanceTo(this.player.position) > 5) return;
+    if (Math.random() > 0.45) return;
+    const dirs = [
+      [1, 0, 0],
+      [-1, 0, 0],
+      [0, 0, 1],
+      [0, 0, -1],
+    ];
+    const [dx, dy, dz] = dirs[Math.floor(Math.random() * dirs.length)];
+    const nx = x + dx;
+    const ny = y + dy;
+    const nz = z + dz;
+    if (this.world.get(nx, ny, nz) !== 0) return;
+    const picks = [blocks.plank, blocks.brick, blocks.stoneBrick, blocks.woolWhite, blocks.glass];
+    const id = picks[Math.floor(Math.random() * picks.length)];
+    this.world.set(nx, ny, nz, id);
+    this.burst(nx + 0.5, ny + 0.5, nz + 0.5, blockDef(id).color, 6, 1.2);
+    sfx.play('place');
+    this.ui.toast(`${helper.personality.emoji} ${helper.personality.name} helped you build!`, 'good', 2600);
+    this.unlock('build2', '🏗️ Built together with a friend!');
+  }
+
+  // ───────── 生存：脚步 / 饥饿 / 摔落 / 战斗 ─────────
+  private updateSurvival(dt: number): void {
+    this.hurtCd -= dt;
+    this.fartCd -= dt;
+
+    // 脚步声
+    if (this.player.moving && this.player.onGround && !this.player.fly) {
+      this.stepT -= dt;
+      if (this.stepT <= 0) {
+        this.stepT = 0.32;
+        sfx.play('step', Math.floor(Math.random() * 3));
+      }
+    }
+
+    // 摔落伤害
+    if (!this.player.onGround) {
+      this.fallFrom = Math.max(this.fallFrom, this.player.position.y);
+    } else if (!this.wasOnGround) {
+      const fall = this.fallFrom - this.player.position.y;
+      if (fall > 4.5 && this.gameMode !== 'creative' && !this.player.fly) {
+        this.damage(Math.round((fall - 4) * 2.2));
+        sfx.play('land');
+      }
+      this.fallFrom = this.player.position.y;
+    }
+    this.wasOnGround = this.player.onGround;
+
+    // 岩浆烫伤
+    const p = this.player.position;
+    const foot = this.world.get(Math.floor(p.x), Math.floor(p.y + 0.4), Math.floor(p.z));
+    if (foot === blocks.lava) this.damage(6);
+
+    // 饥饿与回血
+    this.hunger = Math.max(0, this.hunger - dt * 0.2);
+    this.regenT -= dt;
+    if (this.regenT <= 0) {
+      this.regenT = 1;
+      if (this.hunger > 55) this.heal(1.5);
+      else if (this.hunger <= 0) this.damage(1);
+      this.ui.setStats(this.health, this.maxHealth, this.hunger);
+    }
+
+  }
+
+  private swingLeft(): void {
+    if (!this.vm.hasLeft) return;
+    this.vm.swingLeft();
+    sfx.play('equip');
+    const p = this.player.position;
+    const it = this.inv.offhand ? item(this.inv.offhand.key) : null;
+    const dmg = it?.tool === 'sword' ? 4 + (it.tier ?? 0) * 2 : 2;
+    const hits = this.mobs.strike(p, this.player.forwardVector(), dmg);
+    if (hits) sfx.play('pop');
+  }
+
+  private damage(n: number): void {
+    if (this.gameMode === 'creative' || this.gameMode === 'spectator') return;
+    if (this.hurtCd > 0) return;
+    this.hurtCd = 0.4;
+    this.health = Math.max(0, this.health - n);
+    sfx.play('hurt');
+    const p = this.player.position;
+    this.burst(p.x, p.y + 1, p.z, 0xff4d4d, 8, 1.4);
+    this.ui.setStats(this.health, this.maxHealth, this.hunger);
+    if (this.health <= 0) this.die();
+  }
+
+  private heal(n: number): void {
+    if (this.health >= this.maxHealth) return;
+    this.health = Math.min(this.maxHealth, this.health + n);
+  }
+
+  private die(): void {
+    this.health = this.maxHealth;
+    this.hunger = 55;
+    if (this.spawnPoint) {
+      const s = this.spawnPoint;
+      this.player.teleport(s.x + 0.5, s.y + 1.2, s.z + 0.5);
+    } else {
+      const [x, z] = this.sceneDef.spawn;
+      this.player.teleport(x + 0.5, this.world.groundY(x, z) + 0.8, z + 0.5);
+    }
+    this.ui.bigTitle('💀 You died!');
+    this.ui.toast('You woke up back at your spawn point. Your bag is safe.', 'warn', 4600);
+    this.ui.setStats(this.health, this.maxHealth, this.hunger);
+  }
+
+  // ───────── 放屁 ─────────
+  private fartCount = 0;
+  fart(): void {
+    if (this.fartCd > 0) return;
+    this.fartCd = 0.85;
+    this.fartCount++;
+    sfx.play('fart');
+    const p = this.player.position;
+    const f = this.player.forwardVector();
+    for (let i = 0; i < 3; i++) {
+      this.burst(p.x - f.x * (0.4 + i * 0.2), p.y + 0.7, p.z - f.z * (0.4 + i * 0.2), 0xb9d96a, 9, 1.2);
+    }
+    for (const m of this.mobs.mobs) {
+      if (m.position.distanceTo(p) < 7) m.scare(p.x, p.z, 5);
+    }
+    if (this.fartCount === 1) this.unlock('fart', '💨 First toot!');
+    if (this.fartCount === 25) this.unlock('fart25', '💨 Master of the wind!');
+  }
+
+  // ───────── 触控按钮 ─────────
+  private onTouchAction(a: string): void {
+    switch (a) {
+      case 'fly':
+        this.player.fly = !this.player.fly;
+        this.ui.toast(this.player.fly ? '🪶 Flight on' : '🪶 Flight off', 'info', 2200);
+        break;
+      case 'fart':
+        this.fart();
+        break;
+      case 'inventory':
+        this.toggleInventory();
+        break;
+      case 'chat':
+        this.openConsole();
+        break;
+      case 'menu':
+        this.openPause();
+        break;
+      default:
+        break;
+    }
+  }
+
+  // ───────── 背包界面 ─────────
+  private toggleInventory(): void {
+    if (this.ui.isOverlayOpen('inventory')) this.closeInventory();
+    else this.openInventory();
+  }
+
+  private openInventory(): void {
+    if (this.mode !== 'play') return;
+    sfx.play('open');
+    this.ui.renderInventory(this.inv, this.gameMode === 'creative');
+    this.ui.openOverlay('inventory');
+    this.input.exitLock();
+  }
+
+  private closeInventory(): void {
+    this.inv.clearCraft();
+    this.inv.cursor = null;
+    this.ui.closeOverlay('inventory');
+    this.ui.renderInventory(this.inv, false);
+    this.refreshHud();
+    this.saveAll();
+    if (this.edition === 'java') this.input.requestLock();
+  }
+
+  /** 附近有没有这种方块（工作台 / 熔炉的判定） */
+  private nearBlock(id: number, r = 6): boolean {
+    const p = this.player.position;
+    const x0 = Math.floor(p.x);
+    const y0 = Math.floor(p.y);
+    const z0 = Math.floor(p.z);
+    for (let x = x0 - r; x <= x0 + r; x++)
+      for (let y = Math.max(1, y0 - 3); y <= Math.min(this.world.sy - 1, y0 + 3); y++)
+        for (let z = z0 - r; z <= z0 + r; z++) if (this.world.get(x, y, z) === id) return true;
+    return false;
+  }
+
+  private onInvTab(tab: Tab): void {
+    if (tab === 'craft' && !this.nearBlock(blocks.craftingTable)) {
+      this.ui.toast('🪚 Place a crafting table nearby first!', 'warn', 3000);
+      return;
+    }
+    if (tab === 'furnace' && !this.nearBlock(blocks.furnace)) {
+      this.ui.toast('🔥 Place a furnace nearby first!', 'warn', 3000);
+      return;
+    }
+    this.inv.tab = tab;
+    sfx.play('click');
+    this.ui.renderInventory(this.inv, this.gameMode === 'creative');
+  }
+
+  private paletteKeys(): string[] {
+    if (!this.paletteCache) this.paletteCache = blockItems().map((i) => i.key);
+    return this.paletteCache;
+  }
+  private paletteCache: string[] | null = null;
+
+  private slotGet(target: InvTarget, index: number): Slot | null {
+    const inv = this.inv;
+    if (target === 'storage' || target === 'hotbar') return inv.slots[index];
+    if (target === 'craft') return inv.craft[index];
+    if (target === 'offhand') return inv.offhand;
+    if (target === 'fin') return inv.furnaceIn;
+    return null;
+  }
+
+  private slotSet(target: InvTarget, index: number, s: Slot | null): void {
+    const inv = this.inv;
+    if (target === 'storage' || target === 'hotbar') inv.slots[index] = s;
+    else if (target === 'craft') inv.craft[index] = s;
+    else if (target === 'offhand') inv.offhand = s;
+    else if (target === 'fin') inv.furnaceIn = s;
+  }
+
+  private onInvClick(target: InvTarget, index: number): void {
+    const inv = this.inv;
+    const creative = this.gameMode === 'creative';
+
+    if (target === 'out' || target === 'fout') {
+      this.takeCraftResult();
+      return;
+    }
+    if (target === 'palette') {
+      // 创造模式的物品栏：点一下就拿一组，不消耗
+      const key = this.paletteKeys()[index];
+      if (key) inv.cursor = { key, count: 1 };
+      this.ui.renderInventory(inv, creative);
+      return;
+    }
+
+    const cur = inv.cursor;
+    const slot = this.slotGet(target, index);
+    if (!cur) {
+      if (slot) {
+        this.slotSet(target, index, null);
+        inv.cursor = slot;
+      }
+    } else if (!slot) {
+      this.slotSet(target, index, { key: cur.key, count: cur.count });
+      inv.cursor = null;
+    } else if (slot.key === cur.key) {
+      const max = item(cur.key).stack;
+      const put = Math.min(max - slot.count, cur.count);
+      slot.count += put;
+      cur.count -= put;
+      if (cur.count <= 0) inv.cursor = null;
+    } else {
+      this.slotSet(target, index, cur);
+      inv.cursor = slot;
+    }
+    sfx.play('click');
+    this.ui.renderInventory(inv, creative);
+    this.refreshHud();
+    this.saveAll();
+  }
+
+  private takeCraftResult(): void {
+    const inv = this.inv;
+    const r = inv.craftResult;
+    if (!r) return;
+    if (inv.tab === 'craft' && !this.nearBlock(blocks.craftingTable)) return;
+    if (inv.tab === 'furnace' && !this.nearBlock(blocks.furnace)) return;
+
+    if (inv.tab === 'furnace') {
+      if (inv.furnaceIn) {
+        inv.furnaceIn.count -= 1;
+        if (inv.furnaceIn.count <= 0) inv.furnaceIn = null;
+      }
+    } else {
+      const ids = inv.tab === 'craft' ? [0, 1, 2, 3, 4, 5, 6, 7, 8] : [0, 1, 3, 4];
+      for (const i of ids) {
+        const s = inv.craft[i];
+        if (!s) continue;
+        s.count -= 1;
+        if (s.count <= 0) inv.craft[i] = null;
+      }
+    }
+
+    const got: Slot = { key: r.key, count: r.count };
+    if (inv.cursor && inv.cursor.key === got.key) {
+      const max = item(got.key).stack;
+      const put = Math.min(max - inv.cursor.count, got.count);
+      inv.cursor.count += put;
+      if (put < got.count) inv.add(got.key, got.count - put);
+    } else if (inv.cursor) {
+      if (inv.add(got.key, got.count) > 0) this.ui.toast('🎒 Bag is full!', 'warn', 2400);
+    } else {
+      inv.cursor = got;
+    }
+    sfx.play(inv.tab === 'furnace' ? 'craft' : 'craft');
+    this.unlock('craft', '🔨 Your first craft!');
+    if (item(r.key).tool) this.unlock('tool', '⛏ A tool of your own!');
+    this.ui.renderInventory(inv, this.gameMode === 'creative');
+    this.refreshHud();
+    this.saveAll();
+  }
+
+  // ───────── 暂停菜单 ─────────
+  private openPause(): void {
+    if (this.mode !== 'play') return;
+    this.input.exitLock();
+    this.ui.setPauseLabels({
+      mode: this.gameMode[0].toUpperCase() + this.gameMode.slice(1),
+      edition: this.edition === 'bedrock' ? 'BEDROCK' : 'JAVA',
+      sound: this.soundOn,
+      scene: `${this.sceneDef.icon} ${this.sceneDef.name}`,
+      player: `${this.userMeta.avatar} ${this.userMeta.name}`,
+    });
+    this.ui.openPause();
+    sfx.play('open');
+  }
+
+  private onPauseAction(a: PauseAction): void {
+    switch (a) {
+      case 'resume':
+        this.ui.closeOverlay('pause');
+        if (this.edition === 'java') this.input.requestLock();
+        break;
+      case 'gamemode':
+        this.ui.closeOverlay('pause');
+        this.cycleGameMode();
+        break;
+      case 'inventory':
+        this.ui.closeOverlay('pause');
+        this.openInventory();
+        break;
+      case 'chatlog':
+        this.ui.renderChatLog(
+          this.chatLog.map((c) => ({ ...c, at: new Date(c.at).toLocaleTimeString() })),
+        );
+        this.ui.openOverlay('chatlog');
+        break;
+      case 'players':
+        this.ui.closeOverlay('pause');
+        this.ui.openProfiles();
+        break;
+      case 'help':
+        this.ui.closeOverlay('pause');
+        this.ui.openOverlay('help');
+        break;
+      case 'settings':
+        this.ui.closeOverlay('pause');
+        this.ui.openSettings();
+        break;
+      case 'sound':
+        this.soundOn = !this.soundOn;
+        sfx.setEnabled(this.soundOn);
+        this.ui.setPauseLabels({
+          mode: this.gameMode[0].toUpperCase() + this.gameMode.slice(1),
+          edition: this.edition === 'bedrock' ? 'BEDROCK' : 'JAVA',
+          sound: this.soundOn,
+          scene: `${this.sceneDef.icon} ${this.sceneDef.name}`,
+          player: `${this.userMeta.avatar} ${this.userMeta.name}`,
+        });
+        this.saveAll();
+        break;
+      case 'edition':
+        this.ui.closeOverlay('pause');
+        this.setEdition(this.edition === 'bedrock' ? 'java' : 'bedrock');
+        break;
+      case 'title':
+        this.ui.closeOverlay('pause');
+        this.backToTitle();
+        break;
+    }
+  }
+
+  private backToTitle(): void {
+    this.saveAll();
+    this.mode = 'title';
+    this.ui.closeAllOverlays();
+    this.ui.showTitle();
+    this.ui.setTitlePlayer(this.userMeta);
+    this.input.exitLock();
+  }
+
+  private cycleGameMode(): void {
+    const order = ['creative', 'survival', 'adventure', 'spectator'] as const;
+    const i = order.indexOf(this.gameMode);
+    const label = this.setGameMode(order[(i + 1) % order.length]);
+    this.ui.toast(`🎮 ${label}`, 'info', 3500);
+  }
+
+  private setEdition(e: 'java' | 'bedrock'): void {
+    this.edition = e;
+    this.input.virtualLock = e === 'bedrock';
+    this.touch.setEnabled(e === 'bedrock');
+    document.body.classList.toggle('touch-mode', e === 'bedrock');
+    this.ui.toast(
+      e === 'bedrock' ? '📱 BEDROCK EDITION · touch controls on' : '🖥️ JAVA EDITION · keyboard & mouse',
+      'info',
+      3600,
+    );
+    if (e === 'bedrock') this.input.exitLock();
+    this.saveAll();
+  }
+
+  // ───────── 记录与成就 ─────────
+  private saveAll(): void {
+    saveActive({
+      edition: this.edition,
+      inventory: this.inv.serialize(),
+      chatLog: this.chatLog,
+      friendship: this.friendship,
+      achievements: this.achievements,
+      sound: this.soundOn,
+      volume: this.soundVolume,
+    });
+  }
+
+  /** 吃掉手上拿的食物（饥饿越高回血越快） */
+  private eatHeld(): void {
+    const slot = this.heldSlot();
+    if (!slot) {
+      this.ui.toast('🍽 Nothing to eat in your hand', 'warn', 2200);
+      return;
+    }
+    const it = item(slot.key);
+    if (!it.heal) {
+      this.ui.toast(`${it.icon} ${it.name} is not food!`, 'warn', 2400);
+      return;
+    }
+    if (slot.count <= 1) this.inv.slots[this.hotbarIndex] = null;
+    else slot.count -= 1;
+    this.hunger = Math.min(100, this.hunger + it.heal * 8);
+    this.heal(it.heal * 2);
+    sfx.play('eat');
+    sfx.play('xp');
+    this.ui.toast(`🍽 Ate ${it.name} (+${it.heal * 8} food)`, 'good', 2400);
+    // 魔法豆：吃完必放屁
+    if (slot.key === 'bean') setTimeout(() => this.fart(), 400);
+    this.unlock('eat', '🍞 First meal!');
+    this.ui.setStats(this.health, this.maxHealth, this.hunger);
+    this.refreshHud();
+    this.saveAll();
+  }
+
+  private logChat(who: string, emoji: string, text: string, me: boolean): void {
+    this.chatLog.push({ who, emoji, text, me, at: Date.now() });
+    if (this.chatLog.length > 400) this.chatLog = this.chatLog.slice(-300);
+    this.saveAll();
+  }
+
+  private clearChatLog(): void {
+    this.chatLog = [];
+    this.ui.renderChatLog([]);
+    this.saveAll();
+  }
+
+  private unlock(id: string, label: string): void {
+    if (this.achievements[id]) return;
+    this.achievements[id] = Date.now();
+    this.ui.toast(`🏆 ${label}`, 'good', 4200);
+    sfx.play('levelup');
+    this.saveAll();
+  }
+
+  /** 把手里拿的东西送给面前的村民 */
+  private giveGift(): void {
+    const npc = this.activeNpc;
+    if (!npc) {
+      this.ui.bubble('sys', '🎁 Walk up to a resident first.');
+      return;
+    }
+    const slot = this.heldSlot();
+    if (!slot) {
+      this.ui.bubble('sys', '🎁 You need to hold something to give.');
+      return;
+    }
+    const it = item(slot.key);
+    const id = npc.personality.id;
+    const before = this.friendship[id] ?? 0;
+    this.friendship[id] = before + 1;
+    if (slot.count <= 1) this.inv.slots[this.hotbarIndex] = null;
+    else slot.count -= 1;
+    sfx.play('ding');
+    const f = Math.min(3, this.friendship[id]);
+    this.ui.bubble('sys', `🎁 ${npc.personality.name} loves the ${it.name}! Friendship ${f}/3`);
+    if (this.friendship[id] >= 3 && before < 3) {
+      this.unlock('friend', '🤝 You made a best friend!');
+      this.ui.bubble('sys', `🤝 ${npc.personality.name} says: "I'll come with you!"`);
+      this.followers.add(id);
+    }
+    this.logChat('You', '🙂', `Gave ${it.name} to ${npc.personality.name}`, true);
+    this.refreshHud();
+    this.saveAll();
+  }
+
+  private followers = new Set<string>();
+  private wasPointer = false;
+  private fpsN = 0;
+  private fps = 0;
+
+  /** 好感满 3 颗心的村民会跟着你走 */
+  private updateFollowers(dt: number): void {
+    if (!this.followers.size) return;
+    const p = this.player.position;
+    let i = 0;
+    for (const n of this.npcs) {
+      if (!this.followers.has(n.personality.id)) continue;
+      const to = new THREE.Vector3().subVectors(p, n.position);
+      to.y = 0;
+      const d = to.length();
+      if (d > 7) {
+        // 太远就直接传送到身边，避免跟丢
+        n.position.set(p.x + Math.cos(i) * 1.8, this.world.groundY(Math.floor(p.x), Math.floor(p.z)), p.z + Math.sin(i) * 1.8);
+      } else if (d > 2.4) {
+        to.normalize().multiplyScalar(dt * 2.2);
+        n.position.x += to.x;
+        n.position.z += to.z;
+        n.position.y = this.world.groundY(Math.floor(n.position.x), Math.floor(n.position.z));
+      }
+      i++;
+    }
+  }
+
+  /** JAVA 版的 F3 调试屏 */
+  private updateF3(): void {
+    this.fpsN++;
+    const now = performance.now();
+    if (!this.f3Last) this.f3Last = now;
+    if (now - this.f3Last > 500) {
+      this.fps = Math.round((this.fpsN * 1000) / (now - this.f3Last));
+      this.fpsN = 0;
+      this.f3Last = now;
+    }
+    if (!this.f3On) return;
+    const p = this.player.position;
+    const d = this.player.forwardVector();
+    const facing =
+      Math.abs(d.x) > Math.abs(d.z) ? (d.x > 0 ? 'East (+X)' : 'West (-X)') : d.z > 0 ? 'South (+Z)' : 'North (-Z)';
+    const mobs = this.mobs.mobs.length;
+    const held = this.heldItem();
+    this.ui.setF3(
+      true,
+      [
+        `BlockAcademy — JAVA EDITION`,
+        `XYZ: ${p.x.toFixed(2)} / ${p.y.toFixed(2)} / ${p.z.toFixed(2)}`,
+        `Facing: ${facing}   Biome: ${this.sceneDef.name}`,
+        `Game mode: ${this.gameMode}   Seed: ${this.seed}`,
+        `Time: ${(this.timeNorm * 100).toFixed(0)}% dark   ${this.isNight ? 'Night' : 'Day'}`,
+        `HP: ${Math.round(this.health)}/${this.maxHealth}   Food: ${Math.round(this.hunger)}`,
+        `FPS: ${this.fps}   Entities: ${mobs + this.npcs.length}`,
+        `Held: ${held ? held.name : 'Empty hand'}`,
+        `Edition: ${this.edition.toUpperCase()}`,
+      ].join('<br>'),
+    );
+  }
+  private f3Last = 0;
 
   // ───────── 主循环 ─────────
   private loop(): void {
     requestAnimationFrame(() => this.loop());
     const dt = Math.min(0.05, this.clock.getDelta());
     const asp = innerWidth / innerHeight;
+    this.camera.aspect = asp;
+    this.vm.setAspect(asp);
 
     if (this.mode === 'showcase') {
       this.showcase.update(dt, asp);
@@ -1012,7 +1920,8 @@ class Game {
       return;
     }
 
-    const frozen = this.mode !== 'play' || !this.input.locked;
+    const frozen =
+      this.mode !== 'play' || this.consoleOpen || this.ui.anyOverlayOpen() || !this.input.locked;
     this.player.update(dt, this.input, this.world, frozen);
     this.player.applyCamera(this.camera);
     this.playerLight.position.copy(this.camera.position);
@@ -1020,22 +1929,46 @@ class Game {
 
     const t = performance.now() / 1000;
     for (const n of this.npcs) n.update(dt, t, this.world, this.player.position, frozen);
+    this.mobs.update(dt, this.world, this.player.position, {
+      night: this.isNight,
+      onDamage: (n) => this.damage(n),
+    });
     this.checkProximity();
+
+    // 昼夜循环（默认关闭，可用 /time cycle on 或菜单打开）
+    if (this.cycleOn && !frozen) this.setTimeOfDay((this.timeNorm + dt / 900) % 1);
 
     this.handleKeys();
     if (!frozen) {
-      this.updateHighlight();
-      this.doEdit();
+      this.doMine(dt);
+      this.doPlace(dt);
       const w = this.input.takeWheel();
-      if (w) this.setHotbar((this.hotbarIndex - w + this.hotbar.length) % this.hotbar.length);
+      if (w) this.setHotbar((this.hotbarIndex - w + 9) % 9);
+      this.updateSurvival(dt);
     } else {
       this.highlight.visible = false;
+      this.hitResult = null;
     }
 
-    this.world.flushDirty(3);
+    this.sky.update(dt, this.camera.position);
+    this.updateParticles(dt);
+    this.world.flushDirty(this.isTouch ? 2 : 3);
+
+    const moving = this.player.moving && this.player.onGround;
+    this.vm.update(dt, moving);
     this.updateHint();
+    this.updateFollowers(dt);
+    this.updateF3();
+
+    // JAVA 版：ESC 会自动解除指针锁定，这时就弹出暂停菜单
+    if (this.edition === 'java' && this.mode === 'play' && !this.consoleOpen) {
+      if (this.wasPointer && !this.input.realLocked && !this.ui.anyOverlayOpen()) this.openPause();
+      else if (!this.wasPointer && this.input.realLocked) this.ui.closeOverlay('pause');
+      this.wasPointer = this.input.realLocked;
+    }
 
     this.renderer.render(this.scene, this.camera);
+    this.vm.render(this.renderer);
     this.input.endFrame();
   }
 
@@ -1046,7 +1979,7 @@ class Game {
       this.openConsole();
       return;
     }
-    for (let k = 0; k < this.hotbar.length; k++) {
+    for (let k = 0; k < 9; k++) {
       if (i.pressed(`Digit${k + 1}`)) this.setHotbar(k);
     }
     if (i.pressed('KeyM')) {
@@ -1065,17 +1998,22 @@ class Game {
     }
     if (i.pressed('KeyH')) this.ui.toggleOverlay('help');
     if (i.pressed('Escape') && this.mode === 'dialog') this.closeDialog();
+    // 《我的世界》键位：E 打开物品栏（面前有 NPC / 演示台时优先互动）
     if (i.pressed('KeyE')) {
       if (this.nearPad) {
         const p = this.nearPad;
         if (p.demo) this.playDemo(p.demo);
         else if (p.goto) this.gotoScene(p.goto);
-      } else {
-        const npc = this.nearestNpc();
-        if (npc) this.openDialog(npc);
+      } else if (this.nearestNpc()) {
+        this.openDialog(this.nearestNpc()!);
+      } else if (!this.interactMob()) {
+        this.toggleInventory();
       }
     }
-    void blocks;
+    if (i.pressed('KeyI')) this.toggleInventory();
+    if (i.pressed('KeyG')) this.fart();
+    if (i.pressed('KeyC')) this.swingLeft();
+    if (i.pressed('F3') && this.edition === 'java') this.f3On = !this.f3On;
   }
 
   private nearestNpc(): NPCActor | null {
