@@ -270,6 +270,56 @@ function hayPile(w: World, cx: number, cz: number): void {
   w.putFast(cx, g, cz + 1, blocks.hay);
 }
 
+/**
+ * Grayson 小屋：本游戏的小小作者之一（Co-author）的专属房子。
+ * 石英墙 + 蓝屋顶 + 四角水晶柱点灯，和村里其他木房一眼区分。
+ */
+function graysonHouse(w: World, ox: number, oz: number): void {
+  house(w, ox, oz, 8, 8, 4, blocks.quartz, blocks.woolBlue);
+  const g = groundAt(w, ox, oz);
+  // 四角水晶柱 + 柱顶知识灯
+  for (const [x, z] of [
+    [ox - 1, oz - 1],
+    [ox + 9, oz - 1],
+    [ox - 1, oz + 9],
+    [ox + 9, oz + 9],
+  ] as [number, number][]) {
+    for (let y = g; y <= g + 5; y++) w.putFast(x, y, z, blocks.crystalOre);
+    w.putFast(x, g + 6, z, blocks.lamp);
+  }
+  // 屋顶正中一盏知识灯
+  w.putFast(ox + 4, g + 8, oz + 4, blocks.lamp);
+  // 门前石英小路
+  const mx = ox + 4;
+  for (let z = oz - 1; z >= oz - 3; z--) {
+    const gg = groundAt(w, mx, z);
+    w.putFast(mx, gg, z, blocks.quartz);
+  }
+}
+
+/** Grayson 雕像：广场西北角，石英基座 + 蓝衣小人 + 举灯，脚边镶水晶 */
+function graysonStatue(w: World, cx: number, cz: number): void {
+  const g = groundAt(w, cx, cz);
+  // 基座 3×3，中心柱
+  for (let x = cx - 1; x <= cx + 1; x++)
+    for (let z = cz - 1; z <= cz + 1; z++) w.putFast(x, g, z, blocks.quartz);
+  // 身体（蓝羊毛两层）+ 石英头 + 双臂 + 右手举灯
+  w.putFast(cx, g + 2, cz, blocks.woolBlue);
+  w.putFast(cx, g + 3, cz, blocks.woolBlue);
+  w.putFast(cx, g + 4, cz, blocks.quartz);
+  w.putFast(cx - 1, g + 3, cz, blocks.woolBlue);
+  w.putFast(cx + 1, g + 3, cz, blocks.woolBlue);
+  w.putFast(cx + 1, g + 4, cz, blocks.lamp);
+  // 基座四边镶水晶
+  for (const [dx, dz] of [
+    [-1, 0],
+    [1, 0],
+    [0, -1],
+    [0, 1],
+  ] as [number, number][])
+    w.putFast(cx + dx, g, cz + dz, blocks.crystalOre);
+}
+
 /** 圆形小球（做星球模型） */
 function ball(w: World, cx: number, cy: number, cz: number, r: number, id: number): void {
   for (let x = -r; x <= r; x++)
@@ -329,8 +379,11 @@ export const SCENES: SceneDef[] = [
       house(w, 82, 80, 9, 8, 5, blocks.stoneBrick, blocks.brick);
       // 再加两座小屋 + 一座工具房
       house(w, 56, 44, 7, 7, 4, blocks.plank, blocks.woolBlue);
-      house(w, 74, 86, 7, 7, 4, blocks.plank, blocks.woolPurple);
+      // 东北角是 Grayson 小屋（作者之一的专属房，见 landmarks 名牌）
+      graysonHouse(w, 74, 86);
       workshop(w, 88, 56);
+      // 广场西北角：Grayson 雕像
+      graysonStatue(w, 54, 76);
       // 水井 + 风车
       well(w, 58, 70);
       windmill(w, 30, 88);

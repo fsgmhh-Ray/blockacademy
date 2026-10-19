@@ -1051,24 +1051,27 @@ body.touch-mode #cmd-head .cmd-tip {
   display: none;
 }
 #cmd-close {
-  width: 28px;
+  min-width: 28px;
   height: 28px;
+  padding: 0 8px;
   border-radius: 8px;
   border: 1px solid rgba(255, 138, 138, 0.45);
   background: rgba(120, 40, 40, 0.35);
   color: #ffb4b4;
   font-size: 13px;
+  font-weight: 700;
   line-height: 1;
   cursor: pointer;
+  white-space: nowrap;
 }
 #cmd-close:hover {
   background: rgba(200, 60, 60, 0.55);
   color: #fff;
 }
-/* 手机模式：命令台挪到上半屏，软键盘弹起来也不会挡住 */
+/* 手机模式：命令台顶到最上面（横屏也不会被藏住），软键盘弹起来也不会挡住 */
 body.touch-mode #cmd-console {
   bottom: auto;
-  top: max(10vh, 76px);
+  top: max(8px, env(safe-area-inset-top));
   width: min(680px, 94vw);
 }
 body.touch-mode #cmd-input {
@@ -1080,15 +1083,75 @@ body.touch-mode #cmd-log {
 }
 /* 触屏：✕ / 发送 达到 44px 最小可点区域，戴手套也能点 */
 body.touch-mode #cmd-close {
-  width: 44px;
+  min-width: 72px;
   height: 44px;
-  font-size: 18px;
+  padding: 0 14px;
+  font-size: 15px;
   border-radius: 10px;
 }
 body.touch-mode #cmd-send {
   padding: 10px 18px;
   font-size: 15px;
   min-height: 44px;
+}
+
+/* ───────── 横屏提示：仅触屏设备 + 竖屏时出现 ───────── */
+#rotate-hint {
+  display: none;
+}
+body.is-touch #rotate-hint {
+  position: absolute;
+  inset: 0;
+  z-index: 70;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 24px;
+  text-align: center;
+  color: #eaf2ff;
+  background: rgba(8, 12, 20, 0.92);
+  pointer-events: auto;
+}
+@media (orientation: portrait) {
+  body.is-touch #rotate-hint {
+    display: flex;
+  }
+}
+body.is-touch #rotate-hint .rh-icon {
+  font-size: 54px;
+  animation: rh-rot 2.2s ease-in-out infinite;
+}
+body.is-touch #rotate-hint .rh-title {
+  font-size: 22px;
+  font-weight: 800;
+  letter-spacing: 0.5px;
+}
+body.is-touch #rotate-hint .rh-sub {
+  font-size: 13px;
+  line-height: 1.8;
+  color: #aebad2;
+}
+body.is-touch #rotate-hint #rh-go {
+  margin-top: 12px;
+  min-height: 48px;
+  padding: 12px 22px;
+  font-size: 16px;
+  font-weight: 700;
+  color: #fff;
+  background: linear-gradient(135deg, #3f7fe0, #6a5ae0);
+  border: none;
+  border-radius: 12px;
+  cursor: pointer;
+}
+@keyframes rh-rot {
+  0%,
+  100% {
+    transform: rotate(0deg);
+  }
+  50% {
+    transform: rotate(90deg);
+  }
 }
 
 /* ───────── /title 大字横幅 ───────── */

@@ -129,4 +129,9 @@ export class Input {
     for (const k of [...this.pressedOnce]) if (!this.keys.has(k)) this.pressedOnce.delete(k);
     this.clicks.length = 0;
   }
+
+  /** 清掉积压的点击（关命令台时用：别让「点外面关命令台」那一蹭顺手挖个方块） */
+  clearClicks(): void {
+    this.clicks.length = 0;
+  }
 }

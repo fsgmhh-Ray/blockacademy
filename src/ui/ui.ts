@@ -68,6 +68,8 @@ export interface UIHooks {
     players: PlayerState[];
     invite: string;
   };
+  /** 横屏提示里的「去横屏」按钮：尝试全屏 + 锁定方向 */
+  onLandscape: () => void;
 }
 
 const PRESETS: { name: string; baseUrl: string; model: string; tip: string }[] = [
@@ -140,6 +142,8 @@ export class UI {
     q('hunger');
     q('f3');
     q('friend-bar');
+    q('rotate-hint');
+    q('rh-go');
     this.cmdInput = q('cmd-input') as HTMLInputElement;
     this.cmdLog = q('cmd-log');
     // dialog & overlay inner elements
@@ -227,6 +231,8 @@ export class UI {
     // ✕ 关闭 / 发送按钮（手机上没有 ESC 键，必须给可点的按钮）
     (q('cmd-close') as HTMLButtonElement).onclick = () => this.hooks.onConsoleClose();
     (q('cmd-send') as HTMLButtonElement).onclick = () => this.submitCommand();
+    // 横屏提示里的「去横屏」按钮
+    (q('rh-go') as HTMLButtonElement).onclick = () => this.hooks.onLandscape();
     // 焦点不在输入框时（比如点了日志区），按 ESC 也要能关
     document.addEventListener('keydown', (e) => {
       if (e.key !== 'Escape' || !this.isConsoleOpen()) return;
@@ -487,15 +493,20 @@ export class UI {
 
   // ───────── HUD：生命 / 饥饿 / 调试屏 / 好友 ─────────
   private lastStats = '';
-  setStats(health: number, maxHealth: number, hunger: number): void {
-    const key = `${Math.round(health)}|${Math.round(hunger)}`;
+  setStats(health: number, maxHealth: number, hunger: number, god = false): void {
+    const key = `${Math.round(health)}|${Math.round(hunger)}|${god ? 'G' : '-'}`;
     if (key === this.lastStats) return;
     this.lastStats = key;
     const hearts = 10;
-    const v = (health / maxHealth) * hearts;
-    let a = '';
-    for (let i = 0; i < hearts; i++) a += i + 1 <= v ? '❤️' : i + 0.5 <= v ? '💗' : '🖤';
-    this.el['hearts'].textContent = a;
+    if (god) {
+      // 无敌模式：满心换成盾牌，一眼可见
+      this.el['hearts'].textContent = '🛡️'.repeat(hearts);
+    } else {
+      const v = (health / maxHealth) * hearts;
+      let a = '';
+      for (let i = 0; i < hearts; i++) a += i + 1 <= v ? '❤️' : i + 0.5 <= v ? '💗' : '🖤';
+      this.el['hearts'].textContent = a;
+    }
     const f = (hunger / 100) * hearts;
     let b = '';
     for (let i = 0; i < hearts; i++) b += i + 1 <= f ? '🍗' : '🥄';
@@ -1067,6 +1078,13 @@ export const HOTBAR = [
 const TEMPLATE = `
 <div id="crosshair"></div>
 
+<div id="rotate-hint">
+  <div class="rh-icon">📱↻</div>
+  <div class="rh-title">请把手机横过来</div>
+  <div class="rh-sub">BlockAcademy 是横屏游戏（和手机版 Minecraft 一样）<br />锁定失败时手动旋转即可</div>
+  <button id="rh-go" type="button">🔒 全屏并锁定横屏</button>
+</div>
+
 <div id="topbar" class="panel"></div>
 
 <div id="net-chip" class="panel"></div>
@@ -1388,7 +1406,7 @@ const TEMPLATE = `
   <div id="cmd-head">
     <span class="cmd-title">⌘ 命令台</span>
     <span class="cmd-tip">回车发送 · <kbd>ESC</kbd> 或点 ✕ 关闭</span>
-    <button id="cmd-close" type="button" title="关闭命令台 (ESC)">✕</button>
+    <button id="cmd-close" type="button" title="关闭命令台 (ESC)">✕ 关闭</button>
   </div>
   <div id="cmd-log"></div>
   <div id="cmd-row">

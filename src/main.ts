@@ -16,6 +16,7 @@ import type { InvTarget, PauseAction } from './ui/ui';
 import type { Tab } from './craft/inventory';
 import type { VoxelHit } from './core/world';
 import { SCENES, SCENE_BY_ID, type SceneDef, type Pad } from './world/scenes';
+import { Landmarks } from './world/landmarks';
 import { NPCActor, stopSpeaking } from './npc/npcActor';
 import { BY_ID, PERSONALITIES } from './npc/personalities';
 import { loadLLMConfig, saveLLMConfig, type LLMConfig, type SceneContext } from './npc/brain';
@@ -145,12 +146,17 @@ class Game {
 
   private readonly canvas: HTMLCanvasElement;
   private isTouch = false;
+  /** 无敌（Grayson 爽模式）：掉血/岩浆/窒息全部免疫 */
+  private godMode = false;
+  private landmarks = new Landmarks();
 
   constructor(canvas: HTMLCanvasElement, uiRoot: HTMLElement) {
     const boot = getActiveState();
     initSpeech(boot.state.speech);
     this.canvas = canvas;
     this.isTouch = matchMedia('(pointer: coarse)').matches || navigator.maxTouchPoints > 0;
+    // 触屏设备挂 is-touch：横屏提示与触控布局都靠这个类（与版本选择无关）
+    if (this.isTouch) document.body.classList.add('is-touch');
     this.renderer = new THREE.WebGLRenderer({ canvas, antialias: !this.isTouch, powerPreference: 'high-performance' });
     // 手机上限制像素比，帧率优先
     this.renderer.setPixelRatio(Math.min(devicePixelRatio, this.isTouch ? 1 : 1.6));
@@ -183,6 +189,7 @@ class Game {
       onGift: () => this.giveGift(),
       onEat: () => this.eatHeld(),
       onNetSave: (cfg) => this.saveNet(cfg),
+      onLandscape: () => this.requestLandscape(),
       onNetInfo: () => ({
         enabled: this.netCfg.enabled,
         status: this.netStatus,
@@ -194,8 +201,14 @@ class Game {
     });
 
     this.touch = new TouchControls(uiRoot, this.input, (a) => this.onTouchAction(a));
+    // 触屏：命令台开着时点命令台外面（触屏层整体隐藏，点击会落到画布上）= 关闭，
+    // 手机上多一条退路，横屏也照样管用
+    canvas.addEventListener('pointerdown', () => {
+      if (this.consoleOpen && this.isTouch) this.closeConsole();
+    });
     this.sky.attach(this.scene);
     this.mobs.attach(this.scene);
+    this.landmarks.attach(this.scene);
     this.vm.setSleeve(boot.meta.color);
 
     // ───────── 多人联机：URL ?room= 优先，其次玩家存档，最后默认 main ─────────
@@ -324,6 +337,8 @@ class Game {
     this.ui.hideTitle();
     this.mode = 'play';
     if (this.edition === 'java') this.input.requestLock();
+    // 触屏设备：尽量锁横屏（Android/Chrome 有效；iOS 不支持会静默失败，由 CSS 提示手动旋转）
+    if (this.isTouch) this.requestLandscape();
     // 移动端防护：误选 JAVA 版会没有触控按钮，这里提醒一句并指路
     if (this.isTouch && this.edition === 'java') {
       setTimeout(
@@ -336,11 +351,38 @@ class Game {
         900,
       );
     }
+    // 致敬小小作者之一
+    setTimeout(
+      () =>
+        this.ui.toast(
+          '💙 这个世界由 Grayson 共同创作：去村庄东北角看看「Grayson 小屋」，广场西北角还有他的雕像！（/grayson 查看，/god 无敌爽玩）',
+          'info',
+          7000,
+        ),
+      1400,
+    );
     if (!this.progress.chatTurns) {
       setTimeout(() => this.playDemo('intro'), 300);
     } else {
       this.ui.toast('Welcome back! Press H for controls, M for the map', 'info', 5000);
     }
+  }
+
+  /** 尝试进入全屏并锁定横屏。必须在用户手势里调用；iOS 会静默失败（用横屏提示兜底） */
+  private requestLandscape(): void {
+    const lock = () => {
+      try {
+        (screen.orientation as unknown as { lock?: (o: string) => Promise<void> })?.lock?.('landscape')?.catch?.(() => {});
+      } catch {
+        /* iOS Safari 不支持，忽略 */
+      }
+    };
+    if (document.fullscreenElement) {
+      lock();
+      return;
+    }
+    const el = document.documentElement;
+    if (el.requestFullscreen) el.requestFullscreen().then(lock).catch(() => {});
   }
 
   // ───────── 生物 ─────────
@@ -430,6 +472,9 @@ class Game {
 
     this.pads = scene.pads;
     this.renderPadBeacons();
+    // 静态地标名牌（Grayson 小屋 / 雕像）——只对村庄场景挂
+    this.landmarks.clear();
+    if (scene.id === 'village') this.landmarks.buildVillage(this.world);
     const spawnY = scene.groundY ?? this.world.groundY(scene.spawn[0], scene.spawn[1]);
     this.player.teleport(scene.spawn[0] + 0.5, spawnY + 0.6, scene.spawn[1] + 0.5);
     this.player.velocity.set(0, 0, 0);
@@ -871,6 +916,7 @@ class Game {
   private closeConsole(): void {
     this.consoleOpen = false;
     this.ui.closeConsole();
+    this.input.clearClicks(); // 吃掉关闭时的误触点击，避免顺手挖/放一个方块
     if (this.mode === 'play') this.input.requestLock();
   }
 
@@ -1032,6 +1078,7 @@ class Game {
         out('【Life】    /kill (respawn)   /spawnpoint [x y z]   /setworldspawn [x y z]', 'sys');
         out('           /heal   /feed   /craft (inventory)   /bag   /fart   /pets   /mobs', 'sys');
         out('【Fun】     /cycle on|off (day-night)   /sound on|off   /volume <0-100>', 'sys');
+        out('           /god (invincible on/off)   /grayson (meet the co-author)', 'sys');
         out('           /edition java|bedrock', 'sys');
         out('Coordinates support MC-style ~ : e.g. /tp ~ ~10 ~   /setblock ~ ~1 ~ lamp', 'sys');
         out('Multiplayer: typing without / broadcasts to everyone in the room; block edits sync too.', 'sys');
@@ -1179,6 +1226,28 @@ class Game {
         this.refreshHud();
         return out('Hotbar reset to the default set', 'ok');
       }
+      case 'god':
+      case 'invincible':
+      case 'godmode':
+      case '无敌': {
+        this.godMode = !this.godMode;
+        this.refreshHud();
+        if (this.godMode) {
+          this.ui.toast('🛡️ 无敌模式 ON：摔不坏、岩浆烧不到、怪打不动（再输一次 /god 关闭）', 'good', 5000);
+          return out('🛡️ God mode ON — fall damage / lava / mobs can no longer hurt you', 'ok');
+        }
+        this.ui.toast('🛡️ 无敌模式 OFF：小心脚下！', 'info', 3000);
+        return out('🛡️ God mode OFF', 'ok');
+      }
+      case 'grayson':
+      case 'author': {
+        this.ui.toast('💙 Grayson 是这个世界的小小作者之一！他的小屋在村庄东北角（发光的蓝屋顶），雕像在广场西北角', 'good', 6500);
+        out('💙 Grayson — co-author of BlockAcademy', 'me');
+        out('· Grayson 小屋：村庄东北角，石英墙 + 蓝屋顶 + 水晶柱的那座', 'sys');
+        out('· Grayson 雕像：村庄广场西北角，蓝衣举灯小人', 'sys');
+        out('· 想爽玩？输入 /god 开启无敌模式', 'sys');
+        return;
+      }
       case 'stopsound':
         stopSpeaking();
         return out('Stopped all NPC speech', 'ok');
@@ -1275,11 +1344,11 @@ class Game {
         return out('💨 Pffffft! (key: G)', 'me');
       case 'heal':
         this.health = this.maxHealth;
-        this.ui.setStats(this.health, this.maxHealth, this.hunger);
+        this.ui.setStats(this.health, this.maxHealth, this.hunger, this.godMode);
         return out('Health restored', 'ok');
       case 'feed':
         this.hunger = 100;
-        this.ui.setStats(this.health, this.maxHealth, this.hunger);
+        this.ui.setStats(this.health, this.maxHealth, this.hunger, this.godMode);
         return out('You are full', 'ok');
       case 'sound': {
         const v = (args[0] ?? '').toLowerCase();
@@ -1511,7 +1580,7 @@ class Game {
     this.ui.renderHotbar(this.inv, this.hotbarIndex);
     this.vm.setRight(this.heldSlot()?.key ?? null);
     this.vm.setLeft(this.inv.offhand?.key ?? null);
-    this.ui.setStats(this.health, this.maxHealth, this.hunger);
+    this.ui.setStats(this.health, this.maxHealth, this.hunger, this.godMode);
   }
 
   /** 获得物品，背包满了会提示 */
@@ -1697,7 +1766,7 @@ class Game {
       this.regenT = 1;
       if (this.hunger > 55) this.heal(1.5);
       else if (this.hunger <= 0) this.damage(1);
-      this.ui.setStats(this.health, this.maxHealth, this.hunger);
+      this.ui.setStats(this.health, this.maxHealth, this.hunger, this.godMode);
     }
 
   }
@@ -1715,13 +1784,14 @@ class Game {
 
   private damage(n: number): void {
     if (this.gameMode === 'creative' || this.gameMode === 'spectator') return;
+    if (this.godMode) return; // 无敌模式：掉血/岩浆/摔落/窒息全部免疫
     if (this.hurtCd > 0) return;
     this.hurtCd = 0.4;
     this.health = Math.max(0, this.health - n);
     sfx.play('hurt');
     const p = this.player.position;
     this.burst(p.x, p.y + 1, p.z, 0xff4d4d, 8, 1.4);
-    this.ui.setStats(this.health, this.maxHealth, this.hunger);
+    this.ui.setStats(this.health, this.maxHealth, this.hunger, this.godMode);
     if (this.health <= 0) this.die();
   }
 
@@ -1742,7 +1812,7 @@ class Game {
     }
     this.ui.bigTitle('💀 You died!');
     this.ui.toast('You woke up back at your spawn point. Your bag is safe.', 'warn', 4600);
-    this.ui.setStats(this.health, this.maxHealth, this.hunger);
+    this.ui.setStats(this.health, this.maxHealth, this.hunger, this.godMode);
   }
 
   // ───────── 放屁 ─────────
@@ -2099,7 +2169,7 @@ class Game {
     // 魔法豆：吃完必放屁
     if (slot.key === 'bean') setTimeout(() => this.fart(), 400);
     this.unlock('eat', '🍞 First meal!');
-    this.ui.setStats(this.health, this.maxHealth, this.hunger);
+    this.ui.setStats(this.health, this.maxHealth, this.hunger, this.godMode);
     this.refreshHud();
     this.saveAll();
   }
@@ -2408,6 +2478,10 @@ class Game {
       }
       this.npcCooldown = 0;
       return;
+    }
+    // 走到 Grayson 小屋附近：解锁「拜访作者小屋」成就
+    if (this.sceneDef.id === 'village' && Math.hypot(78.5 - p.x, 90.5 - p.z) < 8) {
+      this.unlock('grayson_house', "💙 Visited Grayson's House — hi, co-author!");
     }
     this.ui.hint(null);
     if (this.npcCooldown++ > 60) this.npcCooldown = 0;
