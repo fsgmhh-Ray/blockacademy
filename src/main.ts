@@ -11,6 +11,17 @@ import { BY_ID } from './npc/personalities';
 import { loadLLMConfig, saveLLMConfig, type LLMConfig, type SceneContext } from './npc/brain';
 import { UI, type HotbarItem } from './ui/ui';
 import { ShowcasePlayer } from './ui/showcase';
+import { setSpeechEnabled, initSpeech } from './ui/speech';
+import {
+  getActiveState,
+  listProfiles,
+  activeId as activeProfileId,
+  createProfile as createUserProfile,
+  selectProfile,
+  deleteProfile as deleteUserProfile,
+  saveActive,
+  type ProfileMeta,
+} from './user/profile';
 import {
   bump,
   isDone,
@@ -43,6 +54,7 @@ class Game {
   pads: Pad[] = [];
   progress: Progress = loadProgress();
   llm: LLMConfig = loadLLMConfig();
+  userMeta: ProfileMeta = getActiveState().meta;
   hotbarIndex = 0;
 
   mode: 'title' | 'play' | 'dialog' | 'showcase' | 'overlay' = 'title';
@@ -62,6 +74,7 @@ class Game {
   private playerLight: THREE.PointLight;
 
   constructor(canvas: HTMLCanvasElement, uiRoot: HTMLElement) {
+    initSpeech(getActiveState().state.speech);
     this.renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' });
     this.renderer.setPixelRatio(Math.min(devicePixelRatio, 1.6));
     this.renderer.setSize(innerWidth, innerHeight);
@@ -74,6 +87,11 @@ class Game {
       onDialogClose: () => this.closeDialog(),
       onSettingSave: (cfg) => this.saveSettings(cfg),
       onTestLLM: (cfg) => this.testLLM(cfg),
+      onSpeech: (v) => this.onSpeech(v),
+      onProfiles: () => ({ list: listProfiles(), activeId: activeProfileId() ?? '' }),
+      onCreateProfile: (name, avatar, color) => this.createProfile(name, avatar, color),
+      onSwitchProfile: (id) => this.switchProfile(id),
+      onDeleteProfile: (id) => this.deleteProfile(id),
       onHotbar: (i) => this.setHotbar(i),
       onDemo: (a) => this.controlDemo(a),
       onPlayDemo: (id) => this.playDemo(id),
@@ -124,6 +142,9 @@ class Game {
     this.ui.renderMap(SCENES, this.sceneDef.id, this.progress, this.doneScenes);
     this.ui.renderQuests(this.sceneDef.id, this.progress);
     this.ui.setScene(this.sceneDef, this.doneScenes.size);
+    this.ui.setTitlePlayer(this.userMeta);
+    this.ui.setPlayer(this.userMeta);
+    this.ui.setSettingsPlayer(this.userMeta);
     this.ui.fillSettings(this.llm);
     this.ui.loadingDone();
     if (location.search.includes('autoplay')) this.start();
@@ -404,6 +425,64 @@ class Game {
   private saveSettings(cfg: LLMConfig): void {
     this.llm = cfg;
     saveLLMConfig(cfg);
+  }
+
+  private onSpeech(v: boolean): void {
+    setSpeechEnabled(v);
+    saveActive({ speech: v });
+    initSpeech(v);
+  }
+
+  // ───────── 玩家系统 ─────────
+  /** Switch the whole game to the active profile, syncing llm / progress / speech / badges. */
+  private applyUser(id: string): void {
+    const a = getActiveState();
+    this.userMeta = a.meta;
+    this.llm = a.state.llm;
+    this.progress = a.state.progress;
+    initSpeech(a.state.speech);
+    this.ui.refreshVoice();
+    this.ui.setTitlePlayer(this.userMeta);
+    this.ui.setPlayer(this.userMeta);
+    this.ui.setSettingsPlayer(this.userMeta);
+    this.ui.fillSettings(this.llm);
+    this.ui.setScene(this.sceneDef, this.doneScenes.size);
+    this.ui.renderQuests(this.sceneDef.id, this.progress);
+    this.ui.renderMap(SCENES, this.sceneDef.id, this.progress, this.doneScenes);
+    // refresh NPC talk-badges for the newly active progress
+    for (const n of this.npcs) {
+      const q = questsOf(this.sceneDef.id).find((x) => x.kind === 'talk' && x.target === n.personality.id);
+      n.setBadge(true, q && isDone(q, this.progress) ? '✓' : '?');
+    }
+    void id;
+  }
+
+  private createProfile(name: string, avatar: string, color: string): void {
+    const m = createUserProfile(name, avatar, color);
+    selectProfile(m.id);
+    this.applyUser(m.id);
+    this.ui.renderProfiles();
+    this.ui.toast(`Added player "${m.name}"`, 'good');
+  }
+
+  private switchProfile(id: string): void {
+    selectProfile(id);
+    this.applyUser(id);
+    this.ui.renderProfiles();
+    const m = listProfiles().find((x) => x.id === id);
+    this.ui.toast(m ? `Switched to "${m.name}"` : 'Switched player', 'info');
+  }
+
+  private deleteProfile(id: string): void {
+    if (!deleteUserProfile(id)) {
+      this.ui.toast('Keep at least one player', 'warn');
+      this.ui.renderProfiles();
+      return;
+    }
+    const cur = activeProfileId();
+    if (cur) this.applyUser(cur);
+    this.ui.renderProfiles();
+    this.ui.toast('Player deleted', 'info');
   }
 
   private async testLLM(cfg: LLMConfig): Promise<string> {
@@ -783,6 +862,10 @@ class Game {
     if (i.pressed('KeyO')) {
       this.ui.fillSettings(this.llm);
       this.ui.toggleOverlay('settings');
+      i.exitLock();
+    }
+    if (i.pressed('KeyP')) {
+      this.ui.openProfiles();
       i.exitLock();
     }
     if (i.pressed('KeyH')) this.ui.toggleOverlay('help');

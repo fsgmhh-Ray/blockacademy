@@ -7,6 +7,7 @@
 import type { Personality } from './personalities';
 import { ALL_KNOWLEDGE, getNode, searchKnowledge, type KnowledgeNode } from '../edu';
 import { PERSONALITIES } from './personalities';
+import { getActiveState, saveActive } from '../user/profile';
 
 export interface LLMConfig {
   enabled: boolean;
@@ -15,20 +16,16 @@ export interface LLMConfig {
   model: string;
 }
 
-const KEY = 'blockacademy.llm';
-
+/**
+ * AI config now lives inside the player profile (see src/user/profile.ts).
+ * These helpers keep the rest of the code unchanged while routing through it.
+ */
 export function loadLLMConfig(): LLMConfig {
-  try {
-    const raw = localStorage.getItem(KEY);
-    if (raw) return { enabled: true, baseUrl: '', apiKey: '', model: '', ...JSON.parse(raw) };
-  } catch {
-    /* ignore */
-  }
-  return { enabled: false, baseUrl: '', apiKey: '', model: '' };
+  return getActiveState().state.llm;
 }
 
 export function saveLLMConfig(cfg: LLMConfig): void {
-  localStorage.setItem(KEY, JSON.stringify(cfg));
+  saveActive({ llm: cfg });
 }
 
 export interface ChatTurn {

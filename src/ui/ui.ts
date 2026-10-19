@@ -5,6 +5,7 @@ import { blocks } from '../world/blockIds';
 import { PERSONALITIES } from '../npc/personalities';
 import { setSpeechEnabled, speechEnabled } from './speech';
 import { loadLLMConfig, type LLMConfig } from '../npc/brain';
+import type { ProfileMeta } from '../user/profile';
 import type { SceneDef } from '../world/scenes';
 import { questsOf, type Quest, type Progress } from '../edu/quests';
 
@@ -15,6 +16,11 @@ export interface UIHooks {
   onDialogClose: () => void;
   onSettingSave: (cfg: LLMConfig) => void;
   onTestLLM: (cfg: LLMConfig) => Promise<string>;
+  onSpeech: (v: boolean) => void;
+  onProfiles: () => { list: ProfileMeta[]; activeId: string };
+  onCreateProfile: (name: string, avatar: string, color: string) => void;
+  onSwitchProfile: (id: string) => void;
+  onDeleteProfile: (id: string) => void;
   onHotbar: (i: number) => void;
   onDemo: (action: 'next' | 'prev' | 'skip' | 'replay') => void;
   onPlayDemo: (id: string) => void;
@@ -46,6 +52,9 @@ export class UI {
   private hotbarItems: HotbarItem[] = HOTBAR.map((h) => ({ ...h }));
   private cmdInput!: HTMLInputElement;
   private cmdLog!: HTMLElement;
+  private selAvatar = '🧑‍🚀';
+  private selColor = '#5ad1c9';
+  private playerMeta: ProfileMeta | null = null;
 
   constructor(
     private root: HTMLElement,
@@ -68,6 +77,7 @@ export class UI {
     q('quests');
     q('overlay-map');
     q('overlay-settings');
+    q('overlay-profiles');
     q('overlay-help');
     q('showcase');
     q('sc-top');
@@ -82,7 +92,7 @@ export class UI {
     this.cmdInput = q('cmd-input') as HTMLInputElement;
     this.cmdLog = q('cmd-log');
     // dialog & overlay inner elements
-    ['dialog-avatar', 'dialog-name', 'dialog-role', 'dialog-engine', 'map-cards', 'preset-row', 'preset-tip', 'llm-enabled', 'llm-base', 'llm-key', 'llm-model', 'llm-save', 'llm-test', 'voice-toggle', 'ask-send'].forEach(
+    ['dialog-avatar', 'dialog-name', 'dialog-role', 'dialog-engine', 'map-cards', 'preset-row', 'preset-tip', 'llm-enabled', 'llm-base', 'llm-key', 'llm-model', 'llm-save', 'llm-test', 'voice-toggle', 'ask-send', 'title-player', 'btn-profiles', 'settings-player', 'settings-player-name', 'btn-open-profiles', 'profile-list', 'profile-name', 'profile-avatars', 'profile-colors', 'btn-profile-add', 'btn-profiles-close'].forEach(
       (id) => (this.el[id] = root.querySelector('#' + id) as HTMLElement),
     );
 
@@ -101,6 +111,10 @@ export class UI {
     (q('btn-map-close') as HTMLButtonElement).onclick = () => this.closeOverlay('map');
     (q('btn-settings-close') as HTMLButtonElement).onclick = () => this.closeOverlay('settings');
     (q('btn-help-close') as HTMLButtonElement).onclick = () => this.closeOverlay('help');
+    (q('btn-profiles') as HTMLButtonElement).onclick = () => this.openProfiles();
+    (q('btn-open-profiles') as HTMLButtonElement).onclick = () => this.openProfiles();
+    (q('btn-profiles-close') as HTMLButtonElement).onclick = () => this.closeOverlay('profiles');
+    (q('btn-profile-add') as HTMLButtonElement).onclick = () => this.createProfile();
     (q('sc-next') as HTMLButtonElement).onclick = () => hooks.onDemo('next');
     (q('sc-prev') as HTMLButtonElement).onclick = () => hooks.onDemo('prev');
     (q('sc-skip') as HTMLButtonElement).onclick = () => hooks.onDemo('skip');
@@ -138,7 +152,10 @@ export class UI {
   }
 
   setScene(scene: SceneDef, badges: number): void {
-    this.el['topbar'].innerHTML = `<span class="scene-name">${scene.icon} ${scene.name}</span><span class="dot"></span><span>${scene.subtitle}</span><span class="dot"></span>Badges <span class="bad">${badges}</span>`;
+    const p = this.playerMeta
+      ? `<span class="player-chip" id="topbar-player"><span class="pavatar sm" style="background:${this.playerMeta.color}">${this.playerMeta.avatar}</span><span class="pname">${escapeHtml(this.playerMeta.name)}</span></span>`
+      : '';
+    this.el['topbar'].innerHTML = `${p}<span class="scene-name">${scene.icon} ${scene.name}</span><span class="dot"></span><span>${scene.subtitle}</span><span class="dot"></span>Badges <span class="bad">${badges}</span>`;
   }
 
   hint(html: string | null): void {
@@ -336,18 +353,19 @@ export class UI {
   }
 
   // ───────── overlays ─────────
-  openOverlay(which: 'map' | 'settings' | 'help'): void {
+  openOverlay(which: 'map' | 'settings' | 'help' | 'profiles'): void {
     this.el[`overlay-${which}`].classList.add('show');
   }
-  closeOverlay(which: 'map' | 'settings' | 'help'): void {
+  closeOverlay(which: 'map' | 'settings' | 'help' | 'profiles'): void {
     this.el[`overlay-${which}`].classList.remove('show');
     this.askInput?.focus?.();
   }
   openSettings(): void {
     this.fillSettings(loadLLMConfig());
+    if (this.playerMeta) this.setSettingsPlayer(this.playerMeta);
     this.openOverlay('settings');
   }
-  toggleOverlay(which: 'map' | 'settings' | 'help'): void {
+  toggleOverlay(which: 'map' | 'settings' | 'help' | 'profiles'): void {
     const e = this.el[`overlay-${which}`];
     e.classList.toggle('show');
   }
@@ -391,15 +409,23 @@ export class UI {
     (this.el['llm-save'] as HTMLButtonElement).onclick = () => this.saveSettings(false);
     (this.el['llm-test'] as HTMLButtonElement).onclick = () => this.saveSettings(true);
     (this.el['voice-toggle'] as HTMLButtonElement).onclick = () => {
-      setSpeechEnabled(!speechEnabled());
+      const nv = !speechEnabled();
+      this.hooks.onSpeech(nv);
+      setSpeechEnabled(nv);
       this.syncVoice();
-      this.toast(speechEnabled() ? 'NPC voice reading enabled' : 'Voice reading disabled');
+      this.toast(nv ? 'NPC voice reading enabled' : 'Voice reading disabled');
     };
     this.syncVoice();
+    this.buildProfilePicker();
   }
 
   private syncVoice(): void {
     (this.el['voice-toggle'] as HTMLButtonElement).textContent = speechEnabled() ? '🔊 Voice: On' : '🔇 Voice: Off';
+  }
+
+  /** Re-sync the voice button label after a profile switch. */
+  refreshVoice(): void {
+    this.syncVoice();
   }
 
   private readCfg(): LLMConfig {
@@ -435,6 +461,96 @@ export class UI {
     this.toast(msg, ok ? 'good' : 'warn', 6000);
   }
 
+  // ───────── player / user system ─────────
+  setTitlePlayer(meta: ProfileMeta): void {
+    this.playerMeta = meta;
+    const el = this.el['title-player'];
+    if (el) el.innerHTML = `<span class="pavatar" style="background:${meta.color}">${meta.avatar}</span><span class="pname">${escapeHtml(meta.name)}</span>`;
+  }
+
+  setPlayer(meta: ProfileMeta): void {
+    this.playerMeta = meta;
+    const el = this.el['topbar-player'];
+    if (el) el.innerHTML = `<span class="pavatar sm" style="background:${meta.color}">${meta.avatar}</span><span class="pname">${escapeHtml(meta.name)}</span>`;
+  }
+
+  setSettingsPlayer(meta: ProfileMeta): void {
+    const av = this.el['settings-player'] as HTMLElement;
+    const nm = this.el['settings-player-name'] as HTMLElement;
+    if (av) av.innerHTML = `<span class="pavatar" style="background:${meta.color}">${meta.avatar}</span>`;
+    if (nm) nm.textContent = meta.name;
+  }
+
+  private buildProfilePicker(): void {
+    const avatars = ['🧑‍🚀', '🦊', '🐱', '🐰', '🐼', '🐯', '🦁', '🐸', '🦉', '🤖', '👧', '👦', '🧒'];
+    const colors = ['#5ad1c9', '#ff8da1', '#ffd166', '#8ab4ff', '#b692ff', '#7ee787', '#ff9f6e', '#6ee7ff'];
+    const ah = this.el['profile-avatars'];
+    if (ah) {
+      ah.innerHTML = avatars
+        .map((a, i) => `<div class="pick ${i === 0 ? 'on' : ''}" data-av="${a}">${a}</div>`)
+        .join('');
+      ah.querySelectorAll('.pick').forEach((c) =>
+        c.addEventListener('click', () => {
+          this.selAvatar = (c as HTMLElement).dataset.av!;
+          ah.querySelectorAll('.pick').forEach((x) => x.classList.remove('on'));
+          c.classList.add('on');
+        }),
+      );
+    }
+    const ch = this.el['profile-colors'];
+    if (ch) {
+      ch.innerHTML = colors
+        .map((c, i) => `<div class="pick" data-co="${c}" style="background:${c}${i === 0 ? ';outline:2px solid #fff' : ''}"></div>`)
+        .join('');
+      ch.querySelectorAll('.pick').forEach((c) =>
+        c.addEventListener('click', () => {
+          this.selColor = (c as HTMLElement).dataset.co!;
+          ch.querySelectorAll('.pick').forEach((x) => ((x as HTMLElement).style.outline = 'none'));
+          (c as HTMLElement).style.outline = '2px solid #fff';
+        }),
+      );
+    }
+  }
+
+  private createProfile(): void {
+    const name = ((this.el['profile-name'] as HTMLInputElement).value || '').trim();
+    this.hooks.onCreateProfile(name, this.selAvatar, this.selColor);
+    (this.el['profile-name'] as HTMLInputElement).value = '';
+  }
+
+  openProfiles(): void {
+    this.renderProfiles();
+    this.openOverlay('profiles');
+  }
+
+  renderProfiles(): void {
+    const { list, activeId } = this.hooks.onProfiles();
+    const host = this.el['profile-list'];
+    if (!host) return;
+    host.innerHTML = list
+      .map(
+        (m) => `<div class="profile-row${m.id === activeId ? ' active' : ''}">
+          <span class="pavatar" style="background:${m.color}">${m.avatar}</span>
+          <span class="pname">${escapeHtml(m.name)}</span>
+          <span class="pactions">
+            ${m.id === activeId ? '<span class="pcur">当前</span>' : `<button class="ghost pswitch" data-id="${m.id}">切换</button>`}
+            ${list.length > 1 ? `<button class="ghost pdel" data-id="${m.id}">删除</button>` : ''}
+          </span>
+        </div>`,
+      )
+      .join('');
+    host.querySelectorAll('.pswitch').forEach((b) =>
+      b.addEventListener('click', () => this.hooks.onSwitchProfile((b as HTMLElement).dataset.id!)),
+    );
+    host.querySelectorAll('.pdel').forEach((b) =>
+      b.addEventListener('click', () => {
+        if (confirm('Delete this player and all their progress? This cannot be undone.')) {
+          this.hooks.onDeleteProfile((b as HTMLElement).dataset.id!);
+        }
+      }),
+    );
+  }
+
   // ───────── demo player ─────────
   showcaseShow(v: boolean): void {
     this.el['showcase'].classList.toggle('show', v);
@@ -446,6 +562,12 @@ export class UI {
     (this.el['sc-bar'] as HTMLElement).style.width = `${info.progress * 100}%`;
     (this.el['sc-step'] as HTMLElement).textContent = `${info.step + 1} / ${info.steps}`;
   }
+}
+
+function escapeHtml(s: string): string {
+  return s.replace(/[&<>"']/g, (c) =>
+    ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c] ?? c,
+  );
 }
 
 export const HOTBAR = [
@@ -508,6 +630,14 @@ const TEMPLATE = `
     <h2>⚙️ Settings</h2>
     <div class="sub">You can play without filling anything: NPCs answer with the local personality engine. Add an API Key and NPCs are driven by a real LLM for freer answers.</div>
 
+    <div class="panel" style="padding:12px 14px;margin-bottom:16px;background:rgba(30,40,62,0.6)">
+      <div class="row" style="align-items:center;gap:10px">
+        <span id="settings-player"></span>
+        <b id="settings-player-name" style="font-size:14px"></b>
+        <button id="btn-open-profiles" class="ghost" style="margin-left:auto">👥 Switch player</button>
+      </div>
+    </div>
+
     <div class="panel" style="padding:14px;margin-bottom:16px;background:rgba(30,40,62,0.6)">
       <label style="display:flex;gap:10px;align-items:center;font-size:14px;margin:0">
         <input type="checkbox" id="llm-enabled" style="width:auto" />
@@ -542,6 +672,37 @@ const TEMPLATE = `
       <button id="llm-test">Test connection</button>
       <button id="voice-toggle" class="ghost">🔇 Voice: Off</button>
       <button id="btn-settings-close" class="ghost">Close (O)</button>
+    </div>
+  </div>
+</div>
+
+<div class="overlay" id="overlay-profiles">
+  <div class="sheet panel">
+    <h2>👥 Players</h2>
+    <div class="sub">Each player keeps their own AI settings, voice preference, and learning progress — great for a family or classroom sharing one device.</div>
+
+    <div id="profile-list" class="profile-list"></div>
+
+    <div class="panel" style="padding:14px;margin:16px 0;background:rgba(30,40,62,0.6)">
+      <div class="field" style="margin:0">
+        <label>Add a new player</label>
+        <input id="profile-name" placeholder="Player name (e.g. Xiao Ming)" maxlength="20" />
+      </div>
+      <div class="field" style="margin:12px 0 6px">
+        <label>Pick an avatar</label>
+        <div class="row" id="profile-avatars"></div>
+      </div>
+      <div class="field" style="margin:6px 0 0">
+        <label>Pick a color</label>
+        <div class="row" id="profile-colors"></div>
+      </div>
+      <div class="row" style="justify-content:flex-end;margin-top:8px">
+        <button id="btn-profile-add" class="primary">＋ Add player</button>
+      </div>
+    </div>
+
+    <div class="row" style="justify-content:flex-end">
+      <button id="btn-profiles-close" class="ghost">Close (P)</button>
     </div>
   </div>
 </div>
@@ -582,9 +743,11 @@ const TEMPLATE = `
   <div>
     <div class="logo">BlockAcademy</div>
     <div class="tag">BlockAcademy · a primary-science world where AI teachers live</div>
+    <div id="title-player" class="title-player"></div>
     <div class="row" style="justify-content:center">
       <button id="btn-start" class="primary" style="font-size:16px;padding:12px 32px">▶ Start Exploring</button>
       <button id="btn-start-llm" class="ghost" style="font-size:14px;padding:12px 22px">Connect an LLM</button>
+      <button id="btn-profiles" class="ghost" style="font-size:14px;padding:12px 22px">👥 Players</button>
     </div>
     <div class="keys">
       <kbd>W A S D</kbd> Move · <kbd>Space</kbd> Jump · <kbd>F</kbd> Fly · <kbd>L-click</kbd> Mine · <kbd>R-click</kbd> Place<br />

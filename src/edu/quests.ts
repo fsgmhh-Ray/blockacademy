@@ -1,3 +1,5 @@
+import { getActiveState, saveActive } from '../user/profile';
+
 /** 场景任务：以「主动探索」为目标，而不是线性脚本 */
 export interface Quest {
   id: string;
@@ -102,7 +104,7 @@ export function questsOf(scene: string): Quest[] {
   return QUESTS.filter((q) => q.scene === scene);
 }
 
-/** 进度读写 */
+/** 进度读写 —— 进度归属到当前玩家（见 src/user/profile.ts） */
 export interface Progress {
   talk: Record<string, number>;
   demo: Record<string, number>;
@@ -111,22 +113,14 @@ export interface Progress {
   chatTurns: number;
 }
 
-const KEY = 'blockacademy.progress';
-
 const empty = (): Progress => ({ talk: {}, demo: {}, build: {}, explore: {}, chatTurns: 0 });
 
 export function loadProgress(): Progress {
-  try {
-    const raw = localStorage.getItem(KEY);
-    if (raw) return { ...empty(), ...JSON.parse(raw) };
-  } catch {
-    /* ignore */
-  }
-  return empty();
+  return getActiveState().state.progress;
 }
 
 export function saveProgress(p: Progress): void {
-  localStorage.setItem(KEY, JSON.stringify(p));
+  saveActive({ progress: p });
 }
 
 export function questValue(p: Progress, q: Quest): number {
