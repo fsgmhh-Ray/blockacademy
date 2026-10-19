@@ -24,6 +24,9 @@
     <script type="module" src="/src/main.ts"></script>
     <script>
       // Register PWA service worker (secure contexts only — skips local http dev).
+      // 注意：用带版本号的文件名（sw.v3.js）。若沿用固定名 sw.js，边缘/浏览器
+      // 缓存会让新版 SW 迟迟不到岗，旧 SW 会继续把旧 App 锁在手机本地。
+      // index.html 本身是 must-revalidate，用户每次都能拿到最新的注册地址。
       if ('serviceWorker' in navigator && location.protocol === 'https:') {
         window.addEventListener('load', () => {
           const hadController = !!navigator.serviceWorker.controller;
@@ -34,7 +37,7 @@
             reloaded = true;
             window.location.reload();
           });
-          navigator.serviceWorker.register('/sw.js').catch(() => {});
+          navigator.serviceWorker.register('/sw.v3.js').catch(() => {});
         });
       }
     </script>

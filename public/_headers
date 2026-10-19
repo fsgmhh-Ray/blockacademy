@@ -1,5 +1,7 @@
 /sw.js
   Cache-Control: no-cache
+/sw.v3.js
+  Cache-Control: no-cache
 /manifest.webmanifest
   Cache-Control: no-cache
 /index.html
