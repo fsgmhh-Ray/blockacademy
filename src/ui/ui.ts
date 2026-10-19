@@ -73,6 +73,7 @@ export interface UIHooks {
 const PRESETS: { name: string; baseUrl: string; model: string; tip: string }[] = [
   { name: 'OpenAI', baseUrl: 'https://api.openai.com/v1', model: 'gpt-4o-mini', tip: 'Official API; needs a reachable network' },
   { name: 'xAI Grok', baseUrl: 'https://api.x.ai/v1', model: 'grok-3-mini', tip: 'Built-in X real-time data — great for up-to-date NPCs' },
+  { name: 'Groq', baseUrl: 'https://api.groq.com/openai/v1', model: 'llama-3.3-70b-versatile', tip: 'Very fast, free tier. Use llama-3.3-70b-versatile (or gpt-oss models, which are slower reasoning models)' },
   { name: 'DeepSeek', baseUrl: 'https://api.deepseek.com/v1', model: 'deepseek-chat', tip: 'Natural expression, cheap — good for beginners' },
   { name: 'Kimi', baseUrl: 'https://api.moonshot.cn/v1', model: 'moonshot-v1-8k', tip: 'Friendly to long text' },
   { name: 'Ali Qwen', baseUrl: 'https://dashscope.aliyuncs.com/compatible-mode/v1', model: 'qwen-plus', tip: 'Stable direct connection in China' },

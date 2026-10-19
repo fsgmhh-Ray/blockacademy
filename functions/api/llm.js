@@ -6,6 +6,12 @@
 function normalizeBaseUrl(baseUrl) {
   baseUrl = (baseUrl || '').trim().replace(/\/+$/, '');
   if (/\/chat\/completions$/.test(baseUrl)) baseUrl = baseUrl.replace(/\/chat\/completions$/, '');
+  // Groq 的版本路径是 /openai/v1 而不是 /v1；用户常填 api.groq.com 根域名，
+  // 按通用规则拼成 /v1 会 404（"model not found" 类误判的根因）
+  if (/^https?:\/\/[^/]*groq\.com/i.test(baseUrl)) {
+    baseUrl = baseUrl.replace(/\/openai(\/v\d+)?$/i, '').replace(/\/v\d+$/i, '');
+    return baseUrl + '/openai/v1';
+  }
   if (!/\/v\d+$/.test(baseUrl)) baseUrl += '/v1';
   return baseUrl;
 }

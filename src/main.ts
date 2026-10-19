@@ -115,7 +115,7 @@ class Game {
   achievements: Record<string, number> = {};
 
   /** 《我的世界》风格游戏模式：survival 生存 / creative 创造 / adventure 冒险 / spectator 旁观 */
-  gameMode: 'survival' | 'creative' | 'adventure' | 'spectator' = 'creative';
+  gameMode: 'survival' | 'creative' | 'adventure' | 'spectator' = 'survival';
   /** /spawnpoint 设定的重生点（绝对坐标），null = 用场景默认出生点 */
   spawnPoint: THREE.Vector3 | null = null;
 
@@ -306,8 +306,7 @@ class Game {
     const btn = document.querySelector(`.edition-btn[data-ed="${ed}"]`);
     document.querySelectorAll('.edition-btn').forEach((b) => b.classList.remove('active'));
     btn?.classList.add('active');
-    // 创造模式送一套起步方块，生存模式背包空空如也
-    if (this.gameMode === 'creative' && !this.inv.slots.some((s) => s)) this.giveStarterKit();
+    // 背包开局为空（需求：空背包探索、自行收集合成）；创造模式有调色板可随取随用
     this.refreshHud();
     this.populateMobs();
     if (location.search.includes('autoplay')) this.start();
@@ -801,6 +800,22 @@ class Game {
         }),
       });
       if (!res.body) return `HTTP ${res.status}`;
+      // 代理层把上游错误（404 模型不存在 / 401 密钥无效等）包装成 JSON 透传，
+      // 必须先读出来，否则会被 SSE 解析器吞掉、误报成「empty reply」
+      if (!res.ok) {
+        const txt = await res.text().catch(() => '');
+        let detail = txt.slice(0, 220);
+        try {
+          const j = JSON.parse(txt);
+          detail = String(j?.error?.message || j?.error || detail);
+        } catch {
+          /* keep raw */
+        }
+        const groqHint = /groq/i.test(cfg.baseUrl)
+          ? '。若用 Groq：地址填 https://api.groq.com/openai/v1，模型名如 llama-3.3-70b-versatile'
+          : '';
+        return `❌ ${res.status}：${detail.slice(0, 180)}${groqHint}`;
+      }
       const reader = res.body.getReader();
       const dec = new TextDecoder();
       let out = '';
@@ -1410,6 +1425,8 @@ class Game {
     this.gameMode = m;
     this.player.fly = m === 'creative' || m === 'spectator';
     this.player.noclip = m === 'spectator';
+    // 切到创造且背包为空时送一套起步方块（生存永远是空背包开局：自己伐木合成）
+    if (m === 'creative' && !this.inv.slots.some((s) => s)) this.giveStarterKit();
     const label = { survival: 'Survival', creative: 'Creative', adventure: 'Adventure', spectator: 'Spectator' }[m];
     const note =
       m === 'creative'
@@ -1762,7 +1779,11 @@ class Game {
         this.toggleInventory();
         break;
       case 'chat':
-        // 💬 = 互动：身边有 NPC 就聊天，有传送台就传送，否则退回命令台
+        // 💬 = 互动：命令台开着就关掉；有 NPC 就聊天，有传送台就传送，否则打开命令台
+        if (this.consoleOpen) {
+          this.closeConsole();
+          break;
+        }
         if (this.nearestNpc()) this.openDialog(this.nearestNpc()!);
         else if (this.nearPad) {
           const p = this.nearPad;
@@ -1774,7 +1795,9 @@ class Game {
         }
         break;
       case 'cmd':
-        this.openConsole();
+        // ⌘ = 命令台开关（再点一次即关闭）
+        if (this.consoleOpen) this.closeConsole();
+        else this.openConsole();
         break;
       case 'menu':
         this.openPause();

@@ -21,7 +21,13 @@ export async function proxyLLM(req, res, body) {
     // URL 归一化：用户可能填到 /chat/completions、/v1、或根域名
     baseUrl = baseUrl.replace(/\/+$/, '');
     if (/\/chat\/completions$/.test(baseUrl)) baseUrl = baseUrl.replace(/\/chat\/completions$/, '');
-    if (!/\/v\d+$/.test(baseUrl)) baseUrl += '/v1';
+    // Groq 的版本路径是 /openai/v1 而不是 /v1；填根域名时按通用规则拼 /v1 会 404
+    if (/^https?:\/\/[^/]*groq\.com/i.test(baseUrl)) {
+      baseUrl = baseUrl.replace(/\/openai(\/v\d+)?$/i, '').replace(/\/v\d+$/i, '');
+      baseUrl += '/openai/v1';
+    } else if (!/\/v\d+$/.test(baseUrl)) {
+      baseUrl += '/v1';
+    }
     const upstream = `${baseUrl}/chat/completions`;
 
     const payload = {
