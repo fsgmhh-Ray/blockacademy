@@ -357,7 +357,7 @@ class Game {
     setTimeout(
       () =>
         this.ui.toast(
-          '💙 这个世界由 Grayson 共同创作：去村庄东北角看看「Grayson 小屋」，广场西北角还有他的雕像！（/grayson 查看，/god 无敌爽玩）',
+          '💙 这个世界由 Grayson 共同创作：去村庄东北角看看「Grayson 小屋」，广场西北角还有他的雕像！（/grayson 查看）',
           'info',
           7000,
         ),
@@ -1081,8 +1081,7 @@ class Game {
         out('【Life】    /kill (respawn)   /spawnpoint [x y z]   /setworldspawn [x y z]', 'sys');
         out('           /heal   /feed   /craft (inventory)   /bag   /fart   /pets   /mobs', 'sys');
         out('【Fun】     /cycle on|off (day-night)   /sound on|off   /volume <0-100>', 'sys');
-        out('           /god (invincible on/off)   /grayson (meet the co-author)', 'sys');
-        out('           /edition java|bedrock', 'sys');
+        out('           /grayson (meet the co-author)   /edition java|bedrock', 'sys');
         out('Coordinates support MC-style ~ : e.g. /tp ~ ~10 ~   /setblock ~ ~1 ~ lamp', 'sys');
         out('Multiplayer: typing without / broadcasts to everyone in the room; block edits sync too.', 'sys');
         out('Keys: E inventory · I inventory · G fart · V wave · C left hand · F3 debug (Java) · ESC menu', 'sys');
@@ -1248,7 +1247,6 @@ class Game {
         out('💙 Grayson — co-author of BlockAcademy', 'me');
         out('· Grayson 小屋：村庄东北角，石英墙 + 蓝屋顶 + 水晶柱的那座', 'sys');
         out('· Grayson 雕像：村庄广场西北角，蓝衣举灯小人', 'sys');
-        out('· 想爽玩？输入 /god 开启无敌模式', 'sys');
         return;
       }
       case 'stopsound':
