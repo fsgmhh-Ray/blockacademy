@@ -6,13 +6,20 @@ import { PERSONALITIES } from '../npc/personalities';
 import { setSpeechEnabled, speechEnabled } from './speech';
 import { loadLLMConfig, type LLMConfig } from '../npc/brain';
 import type { ProfileMeta } from '../user/profile';
-import type { SceneDef } from '../world/scenes';
+import { SCENES, type SceneDef } from '../world/scenes';
 import { questsOf, type Quest, type Progress } from '../edu/quests';
 import type { Inventory, Slot, Tab } from '../craft/inventory';
 import { item, blockItems } from '../craft/items';
+import {
+  DEFAULT_BROKER,
+  type ChatMsg,
+  type NetConfig,
+  type NetStatus,
+  type PlayerState,
+} from '../net/protocol';
 
 export type InvTarget = 'storage' | 'hotbar' | 'craft' | 'out' | 'offhand' | 'fin' | 'fout' | 'palette';
-export type Overlay = 'map' | 'settings' | 'help' | 'profiles' | 'inventory' | 'pause' | 'chatlog';
+export type Overlay = 'map' | 'settings' | 'help' | 'profiles' | 'inventory' | 'pause' | 'chatlog' | 'players';
 export type PauseAction =
   | 'resume'
   | 'gamemode'
@@ -50,6 +57,17 @@ export interface UIHooks {
   onEdition: (edition: 'java' | 'bedrock') => void;
   onGift: () => void;
   onEat: () => void;
+  /** 保存联机配置（broker / 房间 / 开关） */
+  onNetSave: (cfg: NetConfig) => void;
+  /** 读取联机状态与在线玩家（在线面板用） */
+  onNetInfo: () => {
+    enabled: boolean;
+    status: NetStatus;
+    room: string;
+    broker: string;
+    players: PlayerState[];
+    invite: string;
+  };
 }
 
 const PRESETS: { name: string; baseUrl: string; model: string; tip: string }[] = [
@@ -104,6 +122,7 @@ export class UI {
     q('overlay-inventory');
     q('overlay-pause');
     q('overlay-chatlog');
+    q('overlay-players');
     q('showcase');
     q('sc-top');
     q('sc-bar');
@@ -114,6 +133,8 @@ export class UI {
     q('loading');
     q('cmd-console');
     q('cmd-log');
+    q('net-chip');
+    q('chatfeed');
     q('hearts');
     q('hunger');
     q('f3');
@@ -121,7 +142,7 @@ export class UI {
     this.cmdInput = q('cmd-input') as HTMLInputElement;
     this.cmdLog = q('cmd-log');
     // dialog & overlay inner elements
-    ['dialog-avatar', 'dialog-name', 'dialog-role', 'dialog-engine', 'map-cards', 'preset-row', 'preset-tip', 'llm-enabled', 'llm-base', 'llm-key', 'llm-model', 'llm-save', 'llm-test', 'voice-toggle', 'ask-send', 'title-player', 'btn-profiles', 'settings-player', 'settings-player-name', 'btn-open-profiles', 'profile-list', 'profile-name', 'profile-avatars', 'profile-colors', 'btn-profile-add', 'btn-profiles-close', 'inv-sub', 'inv-tabs', 'craft-grid', 'craft-out', 'inv-note', 'inv-storage', 'inv-hotbar', 'btn-inv-close', 'pause-sub', 'pm-resume', 'pm-gamemode', 'pm-inventory', 'pm-chatlog', 'pm-players', 'pm-help', 'pm-settings', 'pm-sound', 'pm-edition', 'pm-title', 'chatlog-list', 'btn-chatlog-clear', 'btn-chatlog-close', 'btn-fart', 'offhand-slot', 'btn-gift', 'btn-eat'].forEach(
+    ['dialog-avatar', 'dialog-name', 'dialog-role', 'dialog-engine', 'map-cards', 'preset-row', 'preset-tip', 'llm-enabled', 'llm-base', 'llm-key', 'llm-model', 'llm-save', 'llm-test', 'voice-toggle', 'ask-send', 'title-player', 'btn-profiles', 'settings-player', 'settings-player-name', 'btn-open-profiles', 'profile-list', 'profile-name', 'profile-avatars', 'profile-colors', 'btn-profile-add', 'btn-profiles-close', 'inv-sub', 'inv-tabs', 'craft-grid', 'craft-out', 'inv-note', 'inv-storage', 'inv-hotbar', 'btn-inv-close', 'pause-sub', 'pm-resume', 'pm-gamemode', 'pm-inventory', 'pm-chatlog', 'pm-players', 'pm-help', 'pm-settings', 'pm-sound', 'pm-edition', 'pm-title', 'chatlog-list', 'btn-chatlog-clear', 'btn-chatlog-close', 'btn-fart', 'offhand-slot', 'btn-gift', 'btn-eat', 'net-enabled', 'net-room', 'net-broker', 'net-save', 'net-status', 'players-list', 'players-room', 'players-status', 'btn-players-invite', 'btn-players-close'].forEach(
       (id) => (this.el[id] = root.querySelector('#' + id) as HTMLElement),
     );
 
@@ -154,6 +175,19 @@ export class UI {
     (q('btn-fart') as HTMLButtonElement).onclick = () => hooks.onFart();
     (q('btn-gift') as HTMLButtonElement).onclick = () => hooks.onGift();
     (q('btn-eat') as HTMLButtonElement).onclick = () => hooks.onEat();
+    // ── 联机：保存配置 / 在线玩家面板 ──
+    (q('net-save') as HTMLButtonElement).onclick = () => {
+      hooks.onNetSave(this.readNet());
+      this.toast('联机设置已保存', 'good', 2200);
+    };
+    (q('btn-players-close') as HTMLButtonElement).onclick = () => this.closeOverlay('players');
+    (q('btn-players-invite') as HTMLButtonElement).onclick = () => {
+      const url = hooks.onNetInfo().invite;
+      navigator.clipboard?.writeText(url).then(
+        () => this.toast('🔗 邀请链接已复制，发给朋友即可', 'good', 3000),
+        () => this.toast('复制失败，请手动复制：' + url, 'warn', 6000),
+      );
+    };
     (
       [
         ['pm-resume', 'resume'],
@@ -277,12 +311,26 @@ export class UI {
   openConsole(): void {
     this.el['cmd-console'].classList.add('show');
     this.cmdLog.innerHTML = '';
+    const touch = document.body.classList.contains('touch-mode');
     this.consolePrint('命令台已打开：输入 /help 查看全部指令。', 'sys');
-    this.consolePrint('关闭：按 ESC，或点右上角 ✕。', 'sys');
-    // 同步 focus（手机端必须在点击手势内调用，软键盘才会弹出来）；
-    // 键鼠路径不是手势上下文，补一个延迟重试。
-    this.cmdInput.focus({ preventScroll: true });
-    setTimeout(() => this.cmdInput.focus({ preventScroll: true }), 60);
+    this.consolePrint(
+      touch ? '关闭：点右上角 ✕。不带 / 的发言会广播给在线玩家。' : '关闭：按 ESC，或点右上角 ✕。',
+      'sys',
+    );
+    // iOS 坑：pointerdown 里调用 focus() 不会弹软键盘，
+    // 必须在 click / pointerup 手势里再 focus 一次。
+    const focusNow = () => this.cmdInput.focus({ preventScroll: true });
+    focusNow();
+    setTimeout(focusNow, 60);
+    const retry = () => {
+      focusNow();
+      window.removeEventListener('pointerup', retry);
+      window.removeEventListener('click', retry);
+      window.removeEventListener('touchend', retry);
+    };
+    window.addEventListener('pointerup', retry, { once: true });
+    window.addEventListener('click', retry, { once: true });
+    window.addEventListener('touchend', retry, { once: true });
   }
 
   closeConsole(): void {
@@ -308,6 +356,8 @@ export class UI {
     if (!v) return;
     this.consolePrint('> ' + v, 'cmd');
     this.hooks.onCommand(v);
+    // 点了「发送」按钮后焦点会跑到按钮上，键盘可能收起——拉回来
+    this.cmdInput.focus({ preventScroll: true });
   }
 
   private paintTile(cv: HTMLCanvasElement, tileKey: string): void {
@@ -686,13 +736,13 @@ export class UI {
   }
   /** 有任何面板打开时应该冻结玩家操作（触屏版没有指针锁定，必须靠这个） */
   anyOverlayOpen(): boolean {
-    for (const w of ['map', 'settings', 'help', 'profiles', 'inventory', 'pause', 'chatlog'] as Overlay[]) {
+    for (const w of ['map', 'settings', 'help', 'profiles', 'inventory', 'pause', 'chatlog', 'players'] as Overlay[]) {
       if (this.el[`overlay-${w}`].classList.contains('show')) return true;
     }
     return false;
   }
   closeAllOverlays(): void {
-    for (const w of ['map', 'settings', 'help', 'profiles', 'inventory', 'pause', 'chatlog'] as Overlay[]) {
+    for (const w of ['map', 'settings', 'help', 'profiles', 'inventory', 'pause', 'chatlog', 'players'] as Overlay[]) {
       this.el[`overlay-${w}`].classList.remove('show');
     }
   }
@@ -779,6 +829,100 @@ export class UI {
     (this.el['llm-base'] as HTMLInputElement).value = cfg.baseUrl;
     (this.el['llm-key'] as HTMLInputElement).value = cfg.apiKey;
     (this.el['llm-model'] as HTMLInputElement).value = cfg.model;
+    this.fillNet();
+  }
+
+  // ───────── 多人联机 UI ─────────
+  private readNet(): NetConfig {
+    return {
+      enabled: (this.el['net-enabled'] as HTMLInputElement).checked,
+      room: (this.el['net-room'] as HTMLInputElement).value.trim() || 'main',
+      broker: (this.el['net-broker'] as HTMLInputElement).value.trim() || DEFAULT_BROKER,
+    };
+  }
+
+  fillNet(): void {
+    const info = this.hooks.onNetInfo();
+    (this.el['net-enabled'] as HTMLInputElement).checked = info.enabled;
+    (this.el['net-room'] as HTMLInputElement).value = info.room;
+    (this.el['net-broker'] as HTMLInputElement).value = info.broker;
+    this.setNetStatus(info.status, info.room, info.players.length);
+  }
+
+  private netLast: { status: NetStatus; room: string; online: number } = { status: 'off', room: 'main', online: 0 };
+
+  setNetStatus(s: NetStatus, room: string, online: number): void {
+    this.netLast = { status: s, room, online };
+    this.paintNet();
+  }
+
+  setOnline(n: number): void {
+    this.netLast = { ...this.netLast, online: n };
+    this.paintNet();
+  }
+
+  private paintNet(): void {
+    const { status, room, online } = this.netLast;
+    const label =
+      status === 'online' ? '🟢 已联机' : status === 'connecting' ? '🟡 连接中' : status === 'error' ? '🔴 连接失败' : '⚪ 未联机';
+    const chip = this.el['net-chip'];
+    if (chip) {
+      chip.innerHTML = `<span class="ncdot ${status}"></span>${label} · 房间「${escapeHtml(room)}」 · <b>${online}</b> 人在线`;
+    }
+    const st = this.el['net-status'];
+    if (st) st.textContent = `${label} · ${online} 人在线`;
+  }
+
+  /** 远程聊天：左下浮动一行（9 秒后消失），最多留 5 行 */
+  netChatLine(m: ChatMsg): void {
+    const feed = this.el['chatfeed'];
+    if (!feed) return;
+    const d = document.createElement('div');
+    d.className = 'feed-line';
+    d.innerHTML = `<span class="pavatar sm" style="background:${m.color}">${m.avatar}</span><b>${escapeHtml(m.name)}</b><span>${escapeHtml(m.text)}</span>`;
+    feed.appendChild(d);
+    while (feed.children.length > 5) feed.removeChild(feed.firstChild as HTMLElement);
+    setTimeout(() => d.remove(), 9000);
+  }
+
+  openPlayers(): void {
+    this.renderNetPlayers(this.hooks.onNetInfo());
+    this.openOverlay('players');
+  }
+
+  renderNetPlayers(info: {
+    enabled: boolean;
+    status: NetStatus;
+    room: string;
+    broker: string;
+    players: PlayerState[];
+    invite: string;
+  }): void {
+    this.el['players-room'].textContent = `房间「${info.room}」 · ${info.broker}`;
+    const label =
+      info.status === 'online'
+        ? '🟢 已联机'
+        : info.status === 'connecting'
+          ? '🟡 连接中'
+          : info.status === 'error'
+            ? '🔴 连接失败（重试中）'
+            : info.enabled
+              ? '⚪ 未连接'
+              : '⚪ 联机已关闭';
+    this.el['players-status'].textContent = label;
+    const host = this.el['players-list'];
+    const rows = info.players.map((p) => {
+      const sc = SCENES.find((s) => s.id === p.scene);
+      const where = p.scene === SCENES[0]?.id ? '' : '';
+      return `<div class="profile-row">
+        <span class="pavatar" style="background:${p.color}">${p.avatar}</span>
+        <span class="pname">${escapeHtml(p.name)}${where}</span>
+        <span class="pactions"><span class="pcur">${sc ? sc.icon + ' ' + sc.name : p.scene}</span></span>
+      </div>`;
+    });
+    host.innerHTML = rows.length
+      ? rows.join('')
+      : '<div class="empty-log">房间里目前只有你一个人。点「复制邀请链接」发给朋友，或换个大一点的房间名。</div>';
   }
 
   private async saveSettings(test: boolean): Promise<void> {
@@ -924,11 +1068,15 @@ const TEMPLATE = `
 
 <div id="topbar" class="panel"></div>
 
+<div id="net-chip" class="panel"></div>
+
 <div id="cmd-title"></div>
 
 <div id="toast"></div>
 
 <div id="hint"></div>
+
+<div id="chatfeed"></div>
 
 <div id="hotbar" class="panel"></div>
 
@@ -1014,6 +1162,26 @@ const TEMPLATE = `
     <div class="field">
       <label>Model name</label>
       <input id="llm-model" placeholder="gpt-4o-mini" />
+      <div class="tip">Tip: use a chat model — reasoning models (e.g. gpt-oss) spend all tokens thinking and may reply empty.</div>
+    </div>
+
+    <div class="panel" style="padding:14px;margin:16px 0;background:rgba(30,40,62,0.6)">
+      <label style="display:flex;gap:10px;align-items:center;font-size:14px;margin:0 0 10px">
+        <input type="checkbox" id="net-enabled" style="width:auto" />
+        <span>🌐 Multiplayer (see online players, chat, shared building)</span>
+      </label>
+      <div class="field" style="margin-bottom:10px">
+        <label>Room name (share it with friends — it works like a password)</label>
+        <input id="net-room" placeholder="main" maxlength="24" />
+      </div>
+      <div class="field" style="margin-bottom:10px">
+        <label>Broker (MQTT over WSS)</label>
+        <input id="net-broker" placeholder="wss://broker.emqx.io:8084/mqtt" />
+      </div>
+      <div class="row" style="align-items:center;gap:10px">
+        <button id="net-save">Save &amp; reconnect</button>
+        <span id="net-status" class="tip" style="margin:0">—</span>
+      </div>
     </div>
 
     <div class="row">
@@ -1052,6 +1220,25 @@ const TEMPLATE = `
 
     <div class="row" style="justify-content:flex-end">
       <button id="btn-profiles-close" class="ghost">Close (P)</button>
+    </div>
+  </div>
+</div>
+
+<div class="overlay" id="overlay-players">
+  <div class="sheet panel">
+    <h2>🌐 Online Players</h2>
+    <div class="sub" id="players-sub">Multiplayer runs over a public MQTT broker — zero setup. Share the invite link so friends land in the same room.</div>
+    <div class="panel" style="padding:12px 14px;margin-bottom:14px;background:rgba(30,40,62,0.6)">
+      <div class="row" style="align-items:center;gap:10px;flex-wrap:wrap">
+        <span id="players-room" class="tip" style="margin:0">Room —</span>
+        <span id="players-status" class="tip" style="margin:0">—</span>
+        <button id="btn-players-invite" class="ghost" style="margin-left:auto">🔗 Copy invite link</button>
+      </div>
+    </div>
+    <div id="players-list" class="profile-list"></div>
+    <div class="tip" style="margin-top:10px">Chat: open the command console (T / ⌘) and type without a slash — everyone in the room sees it. Blocks you mine or place sync too. <kbd>V</kbd> waves at everyone.</div>
+    <div class="row" style="justify-content:flex-end;margin-top:14px">
+      <button id="btn-players-close" class="ghost">Close</button>
     </div>
   </div>
 </div>
@@ -1096,7 +1283,7 @@ const TEMPLATE = `
       <button id="pm-gamemode">🎮 Game Mode: Creative</button>
       <button id="pm-inventory">🎒 Inventory &amp; Crafting</button>
       <button id="pm-chatlog">💬 Chat Log</button>
-      <button id="pm-players">👥 Players</button>
+      <button id="pm-players">🌐 Online Players</button>
       <button id="pm-help">🎮 How to Play</button>
       <button id="pm-settings">⚙️ Settings</button>
       <button id="pm-sound">🔊 Sound: On</button>
@@ -1127,7 +1314,8 @@ const TEMPLATE = `
       <div class="card"><div class="ic">🖱️</div><b>Look &amp; Act</b><small>Mouse to look, left-click to mine, right-click to place, wheel/number keys to switch blocks</small></div>
       <div class="card"><div class="ic">⌨️</div><b>Touch (BEDROCK)</b><small>Left joystick to walk, drag anywhere to look. Buttons: ⬆ jump · ⛏ mine · 🧱 place · 🪶 fly · ⬇ sneak · 💨 fart · 🎒 bag · 💬 talk (stands next to an NPC) · ⌘ commands · ☰ menu</small></div>
       <div class="card"><div class="ic">💬</div><b>Talk to NPCs</b><small>Walk up and press E to chat, ESC to close; type any science question</small></div>
-      <div class="card"><div class="ic">⌘</div><b>Command Console</b><small>Press <kbd>T</kbd> or <kbd>/</kbd> to open. Type a command and press <kbd>Enter</kbd> (or tap 发送). <b>Close it with <kbd>ESC</kbd> or the ✕ button</b> — on touch, use the ⌘ button to open and ✕ to close.</small></div>
+      <div class="card"><div class="ic">⌘</div><b>Command Console</b><small>Press <kbd>T</kbd> or <kbd>/</kbd> to open. Type a command and press <kbd>Enter</kbd> (or tap 发送). <b>Close it with <kbd>ESC</kbd> or the ✕ button</b> — on touch, use the ⌘ button to open and ✕ to close. Typing <b>without</b> a slash chats to everyone online.</small></div>
+      <div class="card"><div class="ic">🌐</div><b>Multiplayer</b><small>Zero setup over a public MQTT broker: you see other players' blocky avatars, chat (console, no slash needed), wave with <kbd>V</kbd>, and every block you mine or place syncs. Pause menu → <b>Online Players</b> shows who is in the room and copies an invite link. Change room/broker in Settings.</small></div>
       <div class="card"><div class="ic">🚪</div><b>Finding the Way Out</b><small>Every teleport pad shoots a tall beam of light with a floating icon — follow the beams. In Dawnlight Village four lit roads lead out through the mountain ring to the pads. Press <kbd>M</kbd> for the map to travel directly.</small></div>
       <div class="card"><div class="ic">🎬</div><b>3D Demo</b><small>Step onto a glowing demo pad and press E for a narrated animation</small></div>
       <div class="card"><div class="ic">🗺️</div><b>Change Scene</b><small>Press M for the map to teleport, or step on a teleport pad</small></div>
@@ -1182,8 +1370,8 @@ const TEMPLATE = `
     </div>
     <div class="keys">
       <kbd>W A S D</kbd> Move · <kbd>Space</kbd> Jump · <kbd>F</kbd> Fly · <kbd>L-click</kbd> Mine · <kbd>R-click</kbd> Place<br />
-      <kbd>E</kbd> Talk / Inventory · <kbd>I</kbd> Inventory · <kbd>G</kbd> Fart · <kbd>C</kbd> Left hand · <kbd>M</kbd> Map<br />
-      <kbd>O</kbd> Settings · <kbd>P</kbd> Players · <kbd>H</kbd> Help · <kbd>T</kbd> Commands · <kbd>ESC</kbd> Menu · <kbd>F3</kbd> Debug
+      <kbd>E</kbd> Talk / Inventory · <kbd>I</kbd> Inventory · <kbd>G</kbd> Fart · <kbd>V</kbd> Wave · <kbd>C</kbd> Left hand · <kbd>M</kbd> Map<br />
+      <kbd>O</kbd> Settings · <kbd>P</kbd> Players · <kbd>H</kbd> Help · <kbd>T</kbd> Chat &amp; Commands · <kbd>ESC</kbd> Menu · <kbd>F3</kbd> Debug
     </div>
   </div>
 </div>

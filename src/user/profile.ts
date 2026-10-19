@@ -16,6 +16,7 @@
  */
 import type { LLMConfig } from '../npc/brain';
 import type { Progress } from '../edu/quests';
+import { DEFAULT_BROKER, DEFAULT_ROOM, type NetConfig } from '../net/protocol';
 
 export interface ProfileMeta {
   id: string;
@@ -49,6 +50,8 @@ export interface UserState {
   achievements: Record<string, number>;
   sound: boolean;
   volume: number;
+  /** 多人联机配置（broker / 房间 / 开关） */
+  net: NetConfig;
 }
 
 const INDEX_KEY = 'blockacademy.users';
@@ -61,6 +64,8 @@ interface Index {
 
 const emptyProgress = (): Progress => ({ talk: {}, demo: {}, build: {}, explore: {}, chatTurns: 0 });
 const defaultLLM = (): LLMConfig => ({ enabled: false, baseUrl: '', apiKey: '', model: '' });
+/** 联机默认开：零配置进公共 broker 的 main 房间；设置里可关/可换 */
+const defaultNet = (): NetConfig => ({ enabled: true, broker: DEFAULT_BROKER, room: DEFAULT_ROOM });
 
 function uid(): string {
   return 'u' + Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
@@ -95,6 +100,7 @@ function defaultState(): UserState {
     achievements: {},
     sound: true,
     volume: 0.55,
+    net: defaultNet(),
   };
 }
 
@@ -115,6 +121,11 @@ function loadState(id: string): UserState {
         achievements: s.achievements && typeof s.achievements === 'object' ? s.achievements : {},
         sound: s.sound === undefined ? true : !!s.sound,
         volume: typeof s.volume === 'number' ? s.volume : 0.55,
+        net: {
+          enabled: s.net?.enabled ?? true,
+          broker: typeof s.net?.broker === 'string' && s.net.broker ? s.net.broker : DEFAULT_BROKER,
+          room: typeof s.net?.room === 'string' && s.net.room ? s.net.room : DEFAULT_ROOM,
+        },
       };
     }
   } catch {
@@ -138,6 +149,7 @@ function saveState(id: string, s: UserState): void {
       achievements: s.achievements,
       sound: s.sound,
       volume: s.volume,
+      net: s.net ?? defaultNet(),
     }),
   );
 }

@@ -13,6 +13,7 @@
     "smoke": "esbuild scripts/smoke.ts --bundle --platform=node --format=esm --external:three --outfile=.tmp-smoke.mjs --log-level=warning && node .tmp-smoke.mjs"
   },
   "dependencies": {
+    "mqtt": "^5.16.1",
     "three": "^0.169.0"
   },
   "devDependencies": {

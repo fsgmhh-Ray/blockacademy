@@ -44,6 +44,18 @@ import {
   type Progress,
   type Quest,
 } from './edu/quests';
+import { NetClient, type Identity } from './net/net';
+import { RemotePlayers } from './net/avatars';
+import {
+  DEFAULT_BROKER,
+  sanitizeRoom,
+  type ChatMsg,
+  type EditMsg,
+  type EventMsg,
+  type NetConfig,
+  type NetStatus,
+  type PlayerState,
+} from './net/protocol';
 
 class Game {
   renderer: THREE.WebGLRenderer;
@@ -109,6 +121,15 @@ class Game {
 
   mode: 'title' | 'play' | 'dialog' | 'showcase' | 'overlay' = 'title';
   activeNpc: NPCActor | null = null;
+
+  // ───────── 多人联机 ─────────
+  netCfg: NetConfig;
+  net!: NetClient;
+  remote!: RemotePlayers;
+  private netStatus: NetStatus = 'off';
+  private netToastAt = 0;
+  private playersRefreshT = 0;
+
   private clock = new THREE.Clock();
   private padCooldown = 0;
   private nearPad: Pad | null = null;
@@ -161,12 +182,52 @@ class Game {
       onEdition: (e) => this.setEdition(e),
       onGift: () => this.giveGift(),
       onEat: () => this.eatHeld(),
+      onNetSave: (cfg) => this.saveNet(cfg),
+      onNetInfo: () => ({
+        enabled: this.netCfg.enabled,
+        status: this.netStatus,
+        room: this.net.room,
+        broker: this.net.broker,
+        players: this.net.getPlayers(),
+        invite: this.net.inviteUrl(),
+      }),
     });
 
     this.touch = new TouchControls(uiRoot, this.input, (a) => this.onTouchAction(a));
     this.sky.attach(this.scene);
     this.mobs.attach(this.scene);
     this.vm.setSleeve(boot.meta.color);
+
+    // ───────── 多人联机：URL ?room= 优先，其次玩家存档，最后默认 main ─────────
+    const st0 = boot.state;
+    const urlRoom = new URLSearchParams(location.search).get('room');
+    this.netCfg = {
+      enabled: st0.net?.enabled ?? true,
+      broker: st0.net?.broker || DEFAULT_BROKER,
+      room: sanitizeRoom(urlRoom || st0.net?.room || 'main'),
+    };
+    this.remote = new RemotePlayers();
+    this.remote.attach(this.scene);
+    this.net = new NetClient(this.netCfg, {
+      onStatus: (s, detail) => this.onNetStatus(s, detail),
+      onPlayer: (p) => {
+        this.remote.upsert(p);
+        this.refreshOnline();
+      },
+      onPlayerGone: (id) => {
+        this.remote.remove(id);
+        this.refreshOnline();
+      },
+      onChat: (m) => this.onNetChat(m),
+      onEdit: (m) => this.applyNetEdit(m),
+      onEvent: (m) => this.onNetEvent(m),
+    });
+    this.net.setIdentity(this.identity());
+    // 胶囊先画一帧初始状态（避免关闭联机时顶栏空白）
+    this.ui.setNetStatus(this.netCfg.enabled ? 'connecting' : 'off', this.netCfg.room, 0);
+    if (this.netCfg.enabled) this.net.connect();
+    // 页面隐藏/关闭：主动退出联机（broker 遗嘱会兜底异常断线）
+    window.addEventListener('pagehide', () => this.net.disconnect());
 
     // 载入玩家存档（版本 / 背包 / 聊天 / 好感 / 成就）
     const st = boot.state;
@@ -264,6 +325,18 @@ class Game {
     this.ui.hideTitle();
     this.mode = 'play';
     if (this.edition === 'java') this.input.requestLock();
+    // 移动端防护：误选 JAVA 版会没有触控按钮，这里提醒一句并指路
+    if (this.isTouch && this.edition === 'java') {
+      setTimeout(
+        () =>
+          this.ui.toast(
+            '📱 检测到触屏设备：当前是 JAVA 键鼠版。点 ☰ 菜单 → Edition 可切换到 BEDROCK 触屏版（虚拟摇杆）',
+            'warn',
+            7000,
+          ),
+        900,
+      );
+    }
     if (!this.progress.chatTurns) {
       setTimeout(() => this.playDemo('intro'), 300);
     } else {
@@ -468,6 +541,9 @@ class Game {
       this.buildScene(s);
       this.ui.renderMap(SCENES, id, this.progress, this.doneScenes);
       saveProgress(this.progress);
+      // 换场景后立刻广播一次，让房间里的人知道我去哪了
+      this.publishNetState(true);
+      this.refreshOnline();
     }, 60);
   }
 
@@ -667,6 +743,8 @@ class Game {
     this.ui.setPlayer(this.userMeta);
     this.ui.setSettingsPlayer(this.userMeta);
     this.ui.fillSettings(this.llm);
+    // 联机身份跟随当前玩家（改名/换头像/换颜色即时生效）
+    this.net.setIdentity(this.identity());
     this.ui.setScene(this.sceneDef, this.doneScenes.size);
     this.ui.renderQuests(this.sceneDef.id, this.progress);
     this.ui.renderMap(SCENES, this.sceneDef.id, this.progress, this.doneScenes);
@@ -716,7 +794,9 @@ class Game {
           baseUrl: cfg.baseUrl,
           apiKey: cfg.apiKey,
           model: cfg.model,
-          max_tokens: 24,
+          // 推理型模型（如 openai/gpt-oss-120b）会先把预算全花在思考上，
+          // 测试必须给足 token，否则 content 为空、误判成「模型名错误」
+          max_tokens: 800,
           messages: [{ role: 'user', content: '只回复两个字：成功' }],
         }),
       });
@@ -724,23 +804,37 @@ class Game {
       const reader = res.body.getReader();
       const dec = new TextDecoder();
       let out = '';
+      let reasoning = '';
+      let upstreamErr = '';
+      let buf = '';
       while (true) {
         const { done, value } = await reader.read();
         if (done) break;
-        const chunk = dec.decode(value, { stream: true });
-        for (const line of chunk.split('\n')) {
+        buf += dec.decode(value, { stream: true });
+        const lines = buf.split('\n');
+        buf = lines.pop() ?? '';
+        for (const line of lines) {
           const s = line.trim();
           if (!s.startsWith('data:')) continue;
-          if (s.slice(5).trim() === '[DONE]') break;
+          const data = s.slice(5).trim();
+          if (data === '[DONE]') continue;
           try {
-            const j = JSON.parse(s.slice(5).trim());
+            const j = JSON.parse(data);
+            // 有的供应商用 200 + SSE 错误帧返回失败
+            if (j?.error) upstreamErr = j.error?.message || JSON.stringify(j.error);
             out += j?.choices?.[0]?.delta?.content ?? '';
+            reasoning += j?.choices?.[0]?.delta?.reasoning ?? j?.choices?.[0]?.delta?.reasoning_content ?? '';
           } catch {
-            /* ignore */
+            /* ignore partial packet */
           }
         }
       }
-      return out ? `✅ Connection OK, model replied: ${out.trim().slice(0, 20)}` : '⚠️ Connected but got empty reply — check the model name';
+      if (upstreamErr) return `❌ Upstream error: ${upstreamErr.slice(0, 160)}`;
+      if (out.trim()) return `✅ Connection OK, model replied: ${out.trim().slice(0, 20)}`;
+      if (reasoning.trim()) {
+        return '⚠️ 已连通，但这是个「推理型」模型：预算全耗在思考上，正文为空。NPC 对话建议换成对话模型（gpt-4o-mini / deepseek-chat / qwen-plus / grok-3-mini）';
+      }
+      return '⚠️ Connected but got empty reply — check the model name';
     } catch (e) {
       return `❌ Failed: ${(e as Error).message}`;
     }
@@ -765,6 +859,105 @@ class Game {
     if (this.mode === 'play') this.input.requestLock();
   }
 
+  // ───────── 多人联机 ─────────
+  private identity(): Identity {
+    return {
+      id: this.userMeta.id,
+      name: this.userMeta.name,
+      avatar: this.userMeta.avatar,
+      color: this.userMeta.color,
+    };
+  }
+
+  private onNetStatus(s: NetStatus, detail?: string): void {
+    this.netStatus = s;
+    this.ui.setNetStatus(s, this.net.room, this.net.getPlayers().length);
+    const now = performance.now();
+    if (s === 'online') {
+      this.ui.toast(`🌐 已联机 · 房间「${this.net.room}」`, 'good', 3000);
+      this.refreshOnline();
+    } else if (s === 'error' && now - this.netToastAt > 8000) {
+      this.netToastAt = now;
+      this.ui.toast(`🌐 联机失败：${detail || 'broker 暂时不可达'}（单人游玩不受影响）`, 'warn', 4800);
+    } else if (s === 'off') {
+      this.ui.toast('🌐 已退出联机（单人模式）', 'info', 2200);
+      this.refreshOnline();
+    }
+  }
+
+  private refreshOnline(): void {
+    this.ui.setOnline(this.net.getPlayers().length);
+  }
+
+  /** 远程聊天：进聊天记录 + 头顶气泡 + 简短提示 */
+  private onNetChat(m: ChatMsg): void {
+    this.logChat(m.name, m.avatar, m.text, false);
+    this.remote.say(m);
+    this.ui.netChatLine(m);
+  }
+
+  /** 远程方块编辑：只应用到自己所在场景，忽略自己的回显 */
+  private applyNetEdit(m: EditMsg): void {
+    if (m.by === this.net.myId) return;
+    if (m.scene !== this.sceneDef.id) return;
+    if (this.world.get(m.x, m.y, m.z) === m.block) return;
+    this.world.set(m.x, m.y, m.z, m.block);
+  }
+
+  private onNetEvent(m: EventMsg): void {
+    if (m.scene !== this.sceneDef.id) return;
+    if (m.kind === 'fart') {
+      this.burst(m.x, m.y + 0.7, m.z, 0xb9d96a, 9, 1.2);
+      sfx.play('fart');
+      this.ui.toast(`💨 ${m.name} 放了个屁！`, 'info', 2600);
+    } else if (m.kind === 'wave') {
+      this.remote.wave(m.id);
+      this.ui.toast(`👋 ${m.name} 向你挥手`, 'info', 2600);
+    }
+  }
+
+  /** 每帧调用：内部按 120ms 节流广播位置，2s 一次心跳 */
+  private publishNetState(force = false): void {
+    if (!this.netCfg.enabled) return;
+    const p = this.player.position;
+    this.net.publishState(force, { scene: this.sceneDef.id, x: p.x, y: p.y, z: p.z, yaw: this.player.yaw });
+  }
+
+  /** 设置页保存联机配置（换 broker/房间会自动重连） */
+  private saveNet(cfg: NetConfig): void {
+    this.netCfg = { ...cfg, room: sanitizeRoom(cfg.room) };
+    this.net.setConfig(this.netCfg);
+    saveActive({ net: this.netCfg });
+    this.refreshOnline();
+  }
+
+  /** 在线玩家面板数据 */
+  netInfo(): {
+    enabled: boolean;
+    status: NetStatus;
+    room: string;
+    broker: string;
+    players: PlayerState[];
+    invite: string;
+  } {
+    return {
+      enabled: this.netCfg.enabled,
+      status: this.netStatus,
+      room: this.net.room,
+      broker: this.net.broker,
+      players: this.net.getPlayers(),
+      invite: this.net.inviteUrl(),
+    };
+  }
+
+  /** 👋 挥手（V 键 / /wave） */
+  wave(): void {
+    const p = this.player.position;
+    this.vm.swingLeft();
+    this.net.event('wave', this.sceneDef.id, p.x, p.y, p.z);
+    this.ui.toast('👋 你挥了挥手', 'info', 1800);
+  }
+
   private blockFromName(name: string): number | null {
     const key = name.toLowerCase().replace(/[^a-z0-9]/g, '');
     if (key in BLOCK_NAMES) return BLOCK_NAMES[key];
@@ -777,8 +970,11 @@ class Game {
     const line = raw.trim();
     if (!line) return;
     if (!line.startsWith('/')) {
+      // 不带 / 的输入 = 聊天：本地记录 + 广播给同房间的玩家
       this.ui.consolePrint('You (said): ' + line, 'me');
       this.ui.toast('📣 ' + line, 'info', 4000);
+      this.net.chat(line);
+      this.logChat('You', this.userMeta.avatar, line, true);
       return;
     }
     const parts = line.slice(1).split(/\s+/).filter(Boolean);
@@ -816,13 +1012,15 @@ class Game {
         out('【World】   /gamemode <survival|creative|adventure|spectator> (or 0/1/2/3)', 'sys');
         out('           /time day|night|noon|sunrise|sunset|set <0-100>|add <0-100>   /weather clear|rain|thunder', 'sys');
         out('【Chat】    /say <text>   /me <text>   /title <text>   /tellraw <text>   /stopsound', 'sys');
-        out('【Info】    /list [scenes|npcs|players|blocks]   /seed      /summon <npc>', 'sys');
+        out('           /wave (wave at online players)   /list online (who is online)', 'sys');
+        out('【Info】    /list [scenes|npcs|players|blocks|online]   /seed      /summon <npc>', 'sys');
         out('【Life】    /kill (respawn)   /spawnpoint [x y z]   /setworldspawn [x y z]', 'sys');
         out('           /heal   /feed   /craft (inventory)   /bag   /fart   /pets   /mobs', 'sys');
         out('【Fun】     /cycle on|off (day-night)   /sound on|off   /volume <0-100>', 'sys');
         out('           /edition java|bedrock', 'sys');
         out('Coordinates support MC-style ~ : e.g. /tp ~ ~10 ~   /setblock ~ ~1 ~ lamp', 'sys');
-        out('Keys: E inventory · I inventory · G fart · C left hand · F3 debug (Java) · ESC menu', 'sys');
+        out('Multiplayer: typing without / broadcasts to everyone in the room; block edits sync too.', 'sys');
+        out('Keys: E inventory · I inventory · G fart · V wave · C left hand · F3 debug (Java) · ESC menu', 'sys');
         return;
       case 'tp':
       case 'teleport': {
@@ -975,6 +1173,9 @@ class Game {
         this.ui.toast(`* ${this.userMeta.name} ${t}`, 'info', 4500);
         return out(`* ${this.userMeta.name} ${t}`, 'me');
       }
+      case 'wave':
+        this.wave();
+        return out('👋 You waved at everyone online', 'ok');
       case 'title': {
         const t = args.join(' ');
         if (!t) return out('Usage: /title <text>', 'err');
@@ -997,6 +1198,13 @@ class Game {
         if (what === 'players') {
           const cur = activeProfileId();
           for (const m of listProfiles()) out(`${m.id === cur ? '▶ ' : '   '}${m.avatar} ${m.name}`, 'sys');
+          return;
+        }
+        if (what === 'online') {
+          const ps = this.net.getPlayers();
+          const status = this.netStatus === 'online' ? '🌐 在线' : '📴 未联机';
+          out(`${status} · 房间「${this.net.room}」 · ${ps.length} 位在线玩家`, 'sys');
+          for (const q of ps) out(`   ${q.avatar} ${q.name} — ${q.scene}`, 'sys');
           return;
         }
         if (what === 'npcs') {
@@ -1306,6 +1514,7 @@ class Game {
       return;
     }
     this.world.set(x, y, z, 0);
+    this.net.edit(this.sceneDef.id, x, y, z, 0);
     this.burst(x + 0.5, y + 0.5, z + 0.5, d.color, 12, 2.4);
     sfx.play('break');
     if (this.gameMode !== 'creative') {
@@ -1394,6 +1603,7 @@ class Game {
       else slot.count -= 1;
     }
     this.world.set(x, y, z, it.block);
+    this.net.edit(this.sceneDef.id, x, y, z, it.block);
     this.placeCd = 0.2;
     this.vm.swingRight();
     sfx.play('place');
@@ -1424,6 +1634,7 @@ class Game {
     const picks = [blocks.plank, blocks.brick, blocks.stoneBrick, blocks.woolWhite, blocks.glass];
     const id = picks[Math.floor(Math.random() * picks.length)];
     this.world.set(nx, ny, nz, id);
+    this.net.edit(this.sceneDef.id, nx, ny, nz, id);
     this.burst(nx + 0.5, ny + 0.5, nz + 0.5, blockDef(id).color, 6, 1.2);
     sfx.play('place');
     this.ui.toast(`${helper.personality.emoji} ${helper.personality.name} helped you build!`, 'good', 2600);
@@ -1532,6 +1743,7 @@ class Game {
     for (const m of this.mobs.mobs) {
       if (m.position.distanceTo(p) < 7) m.scare(p.x, p.z, 5);
     }
+    this.net.event('fart', this.sceneDef.id, p.x, p.y, p.z);
     if (this.fartCount === 1) this.unlock('fart', '💨 First toot!');
     if (this.fartCount === 25) this.unlock('fart25', '💨 Master of the wind!');
   }
@@ -1765,7 +1977,7 @@ class Game {
         break;
       case 'players':
         this.ui.closeOverlay('pause');
-        this.ui.openProfiles();
+        this.ui.openPlayers();
         break;
       case 'help':
         this.ui.closeOverlay('pause');
@@ -1838,6 +2050,7 @@ class Game {
       achievements: this.achievements,
       sound: this.soundOn,
       volume: this.soundVolume,
+      net: this.netCfg,
     });
   }
 
@@ -2011,6 +2224,17 @@ class Game {
     this.player.update(dt, this.input, this.world, frozen);
     this.player.applyCamera(this.camera);
     this.playerLight.position.copy(this.camera.position);
+    // 多人联机：广播自己的位置（内部节流），驱动远程玩家化身
+    this.publishNetState();
+    this.remote.update(dt, performance.now(), this.sceneDef.id);
+    // 在线玩家面板打开时每秒刷新
+    if (this.ui.isOverlayOpen('players')) {
+      this.playersRefreshT -= dt;
+      if (this.playersRefreshT <= 0) {
+        this.playersRefreshT = 1;
+        this.ui.renderNetPlayers(this.netInfo());
+      }
+    }
     if (this.rain && this.rain.visible) this.updateRain(dt);
 
     const t = performance.now() / 1000;
@@ -2102,6 +2326,7 @@ class Game {
     }
     if (i.pressed('KeyI')) this.toggleInventory();
     if (i.pressed('KeyG')) this.fart();
+    if (i.pressed('KeyV')) this.wave();
     if (i.pressed('KeyC')) this.swingLeft();
     if (i.pressed('F3') && this.edition === 'java') this.f3On = !this.f3On;
   }

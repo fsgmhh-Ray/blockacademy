@@ -214,6 +214,7 @@ ${this.rumorLine()}
       const reader = res.body.getReader();
       const dec = new TextDecoder();
       let full = '';
+      let reasoning = '';
       let buf = '';
       while (true) {
         const { done, value } = await reader.read();
@@ -225,20 +226,32 @@ ${this.rumorLine()}
           const s = line.trim();
           if (!s.startsWith('data:')) continue;
           const data = s.slice(5).trim();
-          if (data === '[DONE]') break;
+          if (data === '[DONE]') continue;
           try {
             const j = JSON.parse(data);
+            if (j?.error) return { text: '', engine: 'llm', error: String(j.error?.message || j.error).slice(0, 200) };
             const delta = j?.choices?.[0]?.delta?.content ?? j?.choices?.[0]?.text ?? '';
             if (delta) {
               full += delta;
               onToken?.(full);
             }
+            reasoning += j?.choices?.[0]?.delta?.reasoning ?? j?.choices?.[0]?.delta?.reasoning_content ?? '';
           } catch {
             /* ignore partial packet */
           }
         }
       }
-      if (!full.trim()) return { text: '', engine: 'llm', error: 'model returned empty' };
+      if (!full.trim()) {
+        // 推理型模型（gpt-oss 等）把 token 全花在思考上时正文为空——明确报出来，走本地引擎
+        if (reasoning.trim()) {
+          return {
+            text: '',
+            engine: 'llm',
+            error: 'reasoning model spent all tokens thinking and left no reply — switch to a chat model (gpt-4o-mini / deepseek-chat / qwen-plus)',
+          };
+        }
+        return { text: '', engine: 'llm', error: 'model returned empty' };
+      }
       const node = searchKnowledge(userText, 1)[0]?.node;
       return { text: cleanup(full), engine: 'llm', nodeId: node?.id };
     } catch (e) {
