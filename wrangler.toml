@@ -6,3 +6,6 @@
 name = "blockacademy"
 pages_build_output_dir = "dist"
 compatibility_date = "2024-11-01"
+# Account ID is supplied via the CLOUDFLARE_ACCOUNT_ID environment variable
+# (or the Cloudflare dashboard when connecting Git). Pages config does not
+# accept account_id directly.
