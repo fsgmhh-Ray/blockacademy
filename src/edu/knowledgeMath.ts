@@ -204,7 +204,7 @@ export const MATH_NODES: KnowledgeNode[] = [
     topic: 'Triangles',
     keywords: ['triangle', 'equilateral', 'isosceles', 'scalene', 'right', 'angles sum'],
     explain: 'Every triangle\'s angles add up to 180°. Equilateral: all three sides equal (60° each). Isosceles: two sides equal. Scalene: all different. Right: one 90° angle.',
-    example: 'A pyramid face is a triangle; a set square (三角板) in your pencil case has one right angle.',
+    example: 'A pyramid face is a triangle; a set square in your pencil case has one right angle.',
     ask: 'Tear off the three corners of any paper triangle and line them up — why do they always form a straight line?',
     myth: 'Triangles can NOT have two right angles — two 90° corners already use up the whole 180°.',
     grade: 4,

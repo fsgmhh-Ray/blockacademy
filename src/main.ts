@@ -346,7 +346,7 @@ class Game {
       setTimeout(
         () =>
           this.ui.toast(
-            '📱 检测到触屏设备：当前是 JAVA 键鼠版。点 ☰ 菜单 → Edition 可切换到 BEDROCK 触屏版（虚拟摇杆）',
+            '📱 Touch device detected: you are on the JAVA keyboard & mouse edition. Open the ☰ menu → Edition to switch to BEDROCK touch edition (virtual joystick)',
             'warn',
             7000,
           ),
@@ -357,7 +357,7 @@ class Game {
     setTimeout(
       () =>
         this.ui.toast(
-          '💙 这个世界由 Grayson 共同创作：去村庄东北角看看「Grayson 小屋」，广场西北角还有他的雕像！（/grayson 查看）',
+          '💙 This world was co-created by Grayson: visit "Grayson\'s Cottage" in the northeast corner of the village, and find his statue in the northwest of the square! (type /grayson)',
           'info',
           7000,
         ),
@@ -489,7 +489,7 @@ class Game {
     // 新手最常见的卡点：在村里转半天找不到出口。传送台现在都有光柱信标，这里再口头点一句。
     if (scene.id === 'village') {
       setTimeout(
-        () => this.ui.toast('💡 跟着彩色光柱走，踩上发光传送台就能出村（按 M 直接看地图）', 'info', 6500),
+        () => this.ui.toast('💡 Follow the colored light beams and step on a glowing teleport pad to leave the village (press M for the map)', 'info', 6500),
         600,
       );
     }
@@ -844,7 +844,7 @@ class Game {
           // 推理型模型（如 openai/gpt-oss-120b）会先把预算全花在思考上，
           // 测试必须给足 token，否则 content 为空、误判成「模型名错误」
           max_tokens: 800,
-          messages: [{ role: 'user', content: '只回复两个字：成功' }],
+          messages: [{ role: 'user', content: 'Reply with just two words: success' }],
         }),
       });
       if (!res.body) return `HTTP ${res.status}`;
@@ -860,7 +860,7 @@ class Game {
           /* keep raw */
         }
         const groqHint = /groq/i.test(cfg.baseUrl)
-          ? '。若用 Groq：地址填 https://api.groq.com/openai/v1，模型名如 llama-3.3-70b-versatile'
+          ? '. For Groq: use the base URL https://api.groq.com/openai/v1, with a model like llama-3.3-70b-versatile'
           : '';
         return `❌ ${res.status}：${detail.slice(0, 180)}${groqHint}`;
       }
@@ -895,7 +895,7 @@ class Game {
       if (upstreamErr) return `❌ Upstream error: ${upstreamErr.slice(0, 160)}`;
       if (out.trim()) return `✅ Connection OK, model replied: ${out.trim().slice(0, 20)}`;
       if (reasoning.trim()) {
-        return '⚠️ 已连通，但这是个「推理型」模型：预算全耗在思考上，正文为空。NPC 对话建议换成对话模型（gpt-4o-mini / deepseek-chat / qwen-plus / grok-3-mini）';
+        return '⚠️ Connected, but this is a "reasoning" model: it spent its budget on thinking, so the reply is empty. For NPC chat, switch to a chat model (gpt-4o-mini / deepseek-chat / qwen-plus / grok-3-mini)';
       }
       return '⚠️ Connected but got empty reply — check the model name';
     } catch (e) {
@@ -938,13 +938,13 @@ class Game {
     this.ui.setNetStatus(s, this.net.room, this.net.getPlayers().length);
     const now = performance.now();
     if (s === 'online') {
-      this.ui.toast(`🌐 已联机 · 房间「${this.net.room}」`, 'good', 3000);
+      this.ui.toast(`🌐 Connected · Room "${this.net.room}"`, 'good', 3000);
       this.refreshOnline();
     } else if (s === 'error' && now - this.netToastAt > 8000) {
       this.netToastAt = now;
-      this.ui.toast(`🌐 联机失败：${detail || 'broker 暂时不可达'}（单人游玩不受影响）`, 'warn', 4800);
+      this.ui.toast(`🌐 Connection failed: ${detail || 'broker temporarily unreachable'} (single-player still works)`, 'warn', 4800);
     } else if (s === 'off') {
-      this.ui.toast('🌐 已退出联机（单人模式）', 'info', 2200);
+      this.ui.toast('🌐 Left multiplayer (single-player mode)', 'info', 2200);
       this.refreshOnline();
     }
   }
@@ -973,10 +973,10 @@ class Game {
     if (m.kind === 'fart') {
       this.burst(m.x, m.y + 0.7, m.z, 0xb9d96a, 9, 1.2);
       sfx.play('fart');
-      this.ui.toast(`💨 ${m.name} 放了个屁！`, 'info', 2600);
+      this.ui.toast(`💨 ${m.name} farted!`, 'info', 2600);
     } else if (m.kind === 'wave') {
       this.remote.wave(m.id);
-      this.ui.toast(`👋 ${m.name} 向你挥手`, 'info', 2600);
+      this.ui.toast(`👋 ${m.name} waved at you`, 'info', 2600);
     }
   }
 
@@ -1019,7 +1019,7 @@ class Game {
     const p = this.player.position;
     this.vm.swingLeft();
     this.net.event('wave', this.sceneDef.id, p.x, p.y, p.z);
-    this.ui.toast('👋 你挥了挥手', 'info', 1800);
+    this.ui.toast('👋 You waved', 'info', 1800);
   }
 
   private blockFromName(name: string): number | null {
@@ -1070,18 +1070,18 @@ class Game {
 
     switch (cmd) {
       case 'help':
-        out('【Move】    /tp (/teleport) <x y z> | <scene> | ~ ~10 ~      /locate      /fly', 'sys');
-        out('【Build】   /setblock <x y z> <block>     /fill <region> <block> [replace <blk>]', 'sys');
-        out('           /clone <region> <tx ty tz>    /give <block> [count]    /clear', 'sys');
-        out('【World】   /gamemode <survival|creative|adventure|spectator> (or 0/1/2/3)', 'sys');
-        out('           /time day|night|noon|sunrise|sunset|set <0-100>|add <0-100>   /weather clear|rain|thunder', 'sys');
-        out('【Chat】    /say <text>   /me <text>   /title <text>   /tellraw <text>   /stopsound', 'sys');
-        out('           /wave (wave at online players)   /list online (who is online)', 'sys');
-        out('【Info】    /list [scenes|npcs|players|blocks|online]   /seed      /summon <npc>', 'sys');
-        out('【Life】    /kill (respawn)   /spawnpoint [x y z]   /setworldspawn [x y z]', 'sys');
-        out('           /heal   /feed   /craft (inventory)   /bag   /fart   /pets   /mobs', 'sys');
-        out('【Fun】     /cycle on|off (day-night)   /sound on|off   /volume <0-100>', 'sys');
-        out('           /grayson (meet the co-author)   /edition java|bedrock', 'sys');
+        out('[Move]    /tp (/teleport) <x y z> | <scene> | ~ ~10 ~      /locate      /fly', 'sys');
+        out('[Build]   /setblock <x y z> <block>     /fill <region> <block> [replace <blk>]', 'sys');
+        out('          /clone <region> <tx ty tz>    /give <block> [count]    /clear', 'sys');
+        out('[World]   /gamemode <survival|creative|adventure|spectator> (or 0/1/2/3)', 'sys');
+        out('          /time day|night|noon|sunrise|sunset|set <0-100>|add <0-100>   /weather clear|rain|thunder', 'sys');
+        out('[Chat]    /say <text>   /me <text>   /title <text>   /tellraw <text>   /stopsound', 'sys');
+        out('          /wave (wave at online players)   /list online (who is online)', 'sys');
+        out('[Info]    /list [scenes|npcs|players|blocks|online]   /seed      /summon <npc>', 'sys');
+        out('[Life]    /kill (respawn)   /spawnpoint [x y z]   /setworldspawn [x y z]', 'sys');
+        out('          /heal   /feed   /craft (inventory)   /bag   /fart   /pets   /mobs', 'sys');
+        out('[Fun]     /cycle on|off (day-night)   /sound on|off   /volume <0-100>', 'sys');
+        out('          /grayson (meet the co-author)   /edition java|bedrock', 'sys');
         out('Coordinates support MC-style ~ : e.g. /tp ~ ~10 ~   /setblock ~ ~1 ~ lamp', 'sys');
         out('Multiplayer: typing without / broadcasts to everyone in the room; block edits sync too.', 'sys');
         out('Keys: E inventory · I inventory · G fart · V wave · C left hand · F3 debug (Java) · ESC menu', 'sys');
@@ -1235,18 +1235,18 @@ class Game {
         this.godMode = !this.godMode;
         this.refreshHud();
         if (this.godMode) {
-          this.ui.toast('🛡️ 无敌模式 ON：摔不坏、岩浆烧不到、怪打不动（再输一次 /god 关闭）', 'good', 5000);
+          this.ui.toast('🛡️ God mode ON — fall damage / lava / mobs can no longer hurt you (type /god again to turn off)', 'good', 5000);
           return out('🛡️ God mode ON — fall damage / lava / mobs can no longer hurt you', 'ok');
         }
-        this.ui.toast('🛡️ 无敌模式 OFF：小心脚下！', 'info', 3000);
+        this.ui.toast('🛡️ God mode OFF — watch your step!', 'info', 3000);
         return out('🛡️ God mode OFF', 'ok');
       }
       case 'grayson':
       case 'author': {
-        this.ui.toast('💙 Grayson 是这个世界的小小作者之一！他的小屋在村庄东北角（发光的蓝屋顶），雕像在广场西北角', 'good', 6500);
+        this.ui.toast('💙 Grayson is one of the little co-authors of this world! His cottage is in the northeast corner of the village (the glowing blue roof), and his statue is in the northwest of the square', 'good', 6500);
         out('💙 Grayson — co-author of BlockAcademy', 'me');
-        out('· Grayson 小屋：村庄东北角，石英墙 + 蓝屋顶 + 水晶柱的那座', 'sys');
-        out('· Grayson 雕像：村庄广场西北角，蓝衣举灯小人', 'sys');
+        out('· Grayson\'s Cottage: in the northeast corner of the village — the one with quartz walls, a blue roof, and crystal pillars', 'sys');
+        out('· Grayson statue: in the northwest of the village square — the little blue figure holding a lantern', 'sys');
         return;
       }
       case 'stopsound':
@@ -1287,8 +1287,8 @@ class Game {
         }
         if (what === 'online') {
           const ps = this.net.getPlayers();
-          const status = this.netStatus === 'online' ? '🌐 在线' : '📴 未联机';
-          out(`${status} · 房间「${this.net.room}」 · ${ps.length} 位在线玩家`, 'sys');
+          const status = this.netStatus === 'online' ? '🌐 Online' : '📴 Offline';
+          out(`${status} · Room "${this.net.room}" · ${ps.length} player(s) online`, 'sys');
           for (const q of ps) out(`   ${q.avatar} ${q.name} — ${q.scene}`, 'sys');
           return;
         }
@@ -1862,7 +1862,7 @@ class Game {
           else if (p.goto) this.gotoScene(p.goto);
         } else {
           this.openConsole();
-          this.ui.toast('身边没有 NPC，先打开了命令台（/help）', 'info', 2600);
+          this.ui.toast('No NPC nearby — opened the command console instead (/help)', 'info', 2600);
         }
         break;
       case 'cmd':

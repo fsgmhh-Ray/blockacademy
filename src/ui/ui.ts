@@ -91,6 +91,7 @@ export class UI {
   private selSlot = 0;
   private cmdInput!: HTMLInputElement;
   private cmdLog!: HTMLElement;
+  private _vvPin: { vv: VisualViewport; pin: () => void } | null = null;
   private selAvatar = '🧑‍🚀';
   private selColor = '#5ad1c9';
   private playerMeta: ProfileMeta | null = null;
@@ -183,14 +184,14 @@ export class UI {
     // ── 联机：保存配置 / 在线玩家面板 ──
     (q('net-save') as HTMLButtonElement).onclick = () => {
       hooks.onNetSave(this.readNet());
-      this.toast('联机设置已保存', 'good', 2200);
+      this.toast('Multiplayer settings saved', 'good', 2200);
     };
     (q('btn-players-close') as HTMLButtonElement).onclick = () => this.closeOverlay('players');
     (q('btn-players-invite') as HTMLButtonElement).onclick = () => {
       const url = hooks.onNetInfo().invite;
       navigator.clipboard?.writeText(url).then(
-        () => this.toast('🔗 邀请链接已复制，发给朋友即可', 'good', 3000),
-        () => this.toast('复制失败，请手动复制：' + url, 'warn', 6000),
+        () => this.toast('🔗 Invite link copied — send it to a friend', 'good', 3000),
+        () => this.toast('Copy failed — please copy manually: ' + url, 'warn', 6000),
       );
     };
     (
@@ -317,13 +318,28 @@ export class UI {
   // ───────── command console ─────────
   openConsole(): void {
     this.el['cmd-console'].classList.add('show');
+    // 强制一次同步重排，避免 iOS 首开时布局/媒体查询未刷新（关按钮要转屏才出现的坑）
+    void this.el['cmd-console'].offsetHeight;
     this.cmdLog.innerHTML = '';
     const touch = document.body.classList.contains('touch-mode');
-    this.consolePrint('命令台已打开：输入 /help 查看全部指令。', 'sys');
+    this.consolePrint('Command console opened. Type /help to see all commands.', 'sys');
     this.consolePrint(
-      touch ? '关闭：点右上角 ✕。不带 / 的发言会广播给在线玩家。' : '关闭：按 ESC，或点右上角 ✕。',
+      touch ? 'Close: tap ✕ in the top-right. Typing without a slash broadcasts to players online.' : 'Close: press ESC, or tap ✕ in the top-right.',
       'sys',
     );
+    // 触屏：监听 visualViewport，软键盘弹起/收起、转屏时都实时把命令台贴合可视区，
+    // 并抵消 iOS 把页面顶起的滚动，确保右上角 ✕ 关闭按钮始终可见可点。
+    if (touch && window.visualViewport) {
+      const vv = window.visualViewport;
+      const pin = () => {
+        window.scrollTo(0, 0);
+        this.el['cmd-console'].style.maxHeight = `${Math.max(140, vv.height - 16 - (vv.offsetTop || 0))}px`;
+      };
+      pin();
+      vv.addEventListener('resize', pin);
+      vv.addEventListener('scroll', pin);
+      this._vvPin = { vv, pin };
+    }
     // iOS 坑：pointerdown 里调用 focus() 不会弹软键盘，
     // 必须在 click / pointerup 手势里再 focus 一次。
     const focusNow = () => this.cmdInput.focus({ preventScroll: true });
@@ -341,7 +357,14 @@ export class UI {
   }
 
   closeConsole(): void {
+    if (this._vvPin) {
+      const { vv, pin } = this._vvPin;
+      vv.removeEventListener('resize', pin);
+      vv.removeEventListener('scroll', pin);
+      this._vvPin = null;
+    }
     this.el['cmd-console'].classList.remove('show');
+    this.el['cmd-console'].style.maxHeight = '';
     this.cmdInput.blur();
   }
 
@@ -567,7 +590,7 @@ export class UI {
       n.textContent = String(slot.count);
       host.appendChild(n);
     }
-    host.title = `${it.name} · ${it.cn}`;
+    host.title = it.desc ? `${it.name} — ${it.desc}` : it.name;
   }
 
   private gridEl(cols: number): HTMLDivElement {
@@ -686,7 +709,7 @@ export class UI {
       if (s) {
         slot.appendChild(this.itemIcon(s.key));
         const it = item(s.key);
-        slot.title = `${it.name} · ${it.cn}`;
+        slot.title = it.desc ? `${it.name} — ${it.desc}` : it.name;
         if (s.count > 1) {
           const n = document.createElement('span');
           n.className = 'n';
@@ -876,13 +899,13 @@ export class UI {
   private paintNet(): void {
     const { status, room, online } = this.netLast;
     const label =
-      status === 'online' ? '🟢 已联机' : status === 'connecting' ? '🟡 连接中' : status === 'error' ? '🔴 连接失败' : '⚪ 未联机';
+      status === 'online' ? '🟢 Online' : status === 'connecting' ? '🟡 Connecting' : status === 'error' ? '🔴 Connection failed' : '⚪ Offline';
     const chip = this.el['net-chip'];
     if (chip) {
-      chip.innerHTML = `<span class="ncdot ${status}"></span>${label} · 房间「${escapeHtml(room)}」 · <b>${online}</b> 人在线`;
+      chip.innerHTML = `<span class="ncdot ${status}"></span>${label} · Room "${escapeHtml(room)}" · <b>${online}</b> online`;
     }
     const st = this.el['net-status'];
-    if (st) st.textContent = `${label} · ${online} 人在线`;
+    if (st) st.textContent = `${label} · ${online} online`;
   }
 
   /** 远程聊天：左下浮动一行（9 秒后消失），最多留 5 行 */
@@ -910,17 +933,17 @@ export class UI {
     players: PlayerState[];
     invite: string;
   }): void {
-    this.el['players-room'].textContent = `房间「${info.room}」 · ${info.broker}`;
+    this.el['players-room'].textContent = `Room "${info.room}" · ${info.broker}`;
     const label =
       info.status === 'online'
-        ? '🟢 已联机'
+        ? '🟢 Online'
         : info.status === 'connecting'
-          ? '🟡 连接中'
+          ? '🟡 Connecting'
           : info.status === 'error'
-            ? '🔴 连接失败（重试中）'
+            ? '🔴 Connection failed (retrying)'
             : info.enabled
-              ? '⚪ 未连接'
-              : '⚪ 联机已关闭';
+              ? '⚪ Not connected'
+              : '⚪ Multiplayer off';
     this.el['players-status'].textContent = label;
     const host = this.el['players-list'];
     const rows = info.players.map((p) => {
@@ -934,7 +957,7 @@ export class UI {
     });
     host.innerHTML = rows.length
       ? rows.join('')
-      : '<div class="empty-log">房间里目前只有你一个人。点「复制邀请链接」发给朋友，或换个大一点的房间名。</div>';
+      : '<div class="empty-log">You are the only one in the room right now. Tap "Copy invite link" to invite a friend, or pick a different room name.</div>';
   }
 
   private async saveSettings(test: boolean): Promise<void> {
@@ -1025,8 +1048,8 @@ export class UI {
           <span class="pavatar" style="background:${m.color}">${m.avatar}</span>
           <span class="pname">${escapeHtml(m.name)}</span>
           <span class="pactions">
-            ${m.id === activeId ? '<span class="pcur">当前</span>' : `<button class="ghost pswitch" data-id="${m.id}">切换</button>`}
-            ${list.length > 1 ? `<button class="ghost pdel" data-id="${m.id}">删除</button>` : ''}
+            ${m.id === activeId ? '<span class="pcur">Current</span>' : `<button class="ghost pswitch" data-id="${m.id}">Switch</button>`}
+            ${list.length > 1 ? `<button class="ghost pdel" data-id="${m.id}">Delete</button>` : ''}
           </span>
         </div>`,
       )
@@ -1080,9 +1103,9 @@ const TEMPLATE = `
 
 <div id="rotate-hint">
   <div class="rh-icon">📱↻</div>
-  <div class="rh-title">请把手机横过来</div>
-  <div class="rh-sub">BlockAcademy 是横屏游戏（和手机版 Minecraft 一样）<br />锁定失败时手动旋转即可</div>
-  <button id="rh-go" type="button">🔒 全屏并锁定横屏</button>
+  <div class="rh-title">Turn your phone sideways</div>
+  <div class="rh-sub">BlockAcademy is a landscape game (like the mobile Minecraft)<br />If auto-lock fails, just rotate it manually</div>
+  <button id="rh-go" type="button">🔒 Fullscreen &amp; lock landscape</button>
 </div>
 
 <div id="topbar" class="panel"></div>
@@ -1333,7 +1356,7 @@ const TEMPLATE = `
       <div class="card"><div class="ic">🖱️</div><b>Look &amp; Act</b><small>Mouse to look, left-click to mine, right-click to place, wheel/number keys to switch blocks</small></div>
       <div class="card"><div class="ic">⌨️</div><b>Touch (BEDROCK)</b><small>Left joystick to walk, drag anywhere to look. Buttons: ⬆ jump · ⛏ mine · 🧱 place · 🪶 fly · ⬇ sneak · 💨 fart · 🎒 bag · 💬 talk (stands next to an NPC) · ⌘ commands · ☰ menu</small></div>
       <div class="card"><div class="ic">💬</div><b>Talk to NPCs</b><small>Walk up and press E to chat, ESC to close; type any science question</small></div>
-      <div class="card"><div class="ic">⌘</div><b>Command Console</b><small>Press <kbd>T</kbd> or <kbd>/</kbd> to open. Type a command and press <kbd>Enter</kbd> (or tap 发送). <b>Close it with <kbd>ESC</kbd> or the ✕ button</b> — on touch, use the ⌘ button to open and ✕ to close. Typing <b>without</b> a slash chats to everyone online.</small></div>
+      <div class="card"><div class="ic">⌘</div><b>Command Console</b><small>Press <kbd>T</kbd> or <kbd>/</kbd> to open. Type a command and press <kbd>Enter</kbd> (or tap Send). <b>Close it with <kbd>ESC</kbd> or the ✕ button</b> — on touch, use the ⌘ button to open and ✕ to close. Typing <b>without</b> a slash chats to everyone online.</small></div>
       <div class="card"><div class="ic">🌐</div><b>Multiplayer</b><small>Zero setup over a public MQTT broker: you see other players' blocky avatars, chat (console, no slash needed), wave with <kbd>V</kbd>, and every block you mine or place syncs. Pause menu → <b>Online Players</b> shows who is in the room and copies an invite link. Change room/broker in Settings.</small></div>
       <div class="card"><div class="ic">🚪</div><b>Finding the Way Out</b><small>Every teleport pad shoots a tall beam of light with a floating icon — follow the beams. In Dawnlight Village four lit roads lead out through the mountain ring to the pads. Press <kbd>M</kbd> for the map to travel directly.</small></div>
       <div class="card"><div class="ic">🎬</div><b>3D Demo</b><small>Step onto a glowing demo pad and press E for a narrated animation</small></div>
@@ -1404,15 +1427,15 @@ const TEMPLATE = `
 
 <div id="cmd-console">
   <div id="cmd-head">
-    <span class="cmd-title">⌘ 命令台</span>
-    <span class="cmd-tip">回车发送 · <kbd>ESC</kbd> 或点 ✕ 关闭</span>
-    <button id="cmd-close" type="button" title="关闭命令台 (ESC)">✕ 关闭</button>
+    <span class="cmd-title">⌘ Command Console</span>
+    <span class="cmd-tip">Enter to send · <kbd>ESC</kbd> or tap ✕ to close</span>
+    <button id="cmd-close" type="button" title="Close command console (ESC)">✕ Close</button>
   </div>
   <div id="cmd-log"></div>
   <div id="cmd-row">
     <span class="prompt">/</span>
-    <input id="cmd-input" placeholder="输入命令…（/help 查看全部指令）" autocomplete="off" autocapitalize="off" spellcheck="false" enterkeyhint="send" />
-    <button id="cmd-send" type="button">发送</button>
+    <input id="cmd-input" placeholder="Type a command… (/help for all commands)" autocomplete="off" autocapitalize="off" spellcheck="false" enterkeyhint="send" />
+    <button id="cmd-send" type="button">Send</button>
   </div>
 </div>
 `;

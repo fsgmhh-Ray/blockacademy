@@ -40,14 +40,14 @@ const D = (
 ): MobDef => ({ kind, name, cn, icon, sound, hostile, speed, hp, gift, tameFood, scale });
 
 export const MOB_DEFS: Record<MobKind, MobDef> = {
-  cow: D('cow', 'Cow', '奶牛', '🐄', 'moo', false, 0.9, 10, 'milk', 'wheat', 1),
-  pig: D('pig', 'Pig', '小猪', '🐖', 'oink', false, 1.0, 10, 'leather', 'carrot', 0.85),
-  sheep: D('sheep', 'Sheep', '绵羊', '🐑', 'baa', false, 0.85, 8, 'wool_white', 'wheat', 0.92),
-  chicken: D('chicken', 'Chicken', '小鸡', '🐔', 'cluck', false, 1.15, 4, 'egg', 'wheat', 0.6),
-  dog: D('dog', 'Dog', '小狗', '🐕', 'woof', false, 2.0, 8, null, 'bread', 0.8),
-  cat: D('cat', 'Cat', '小猫', '🐈', 'meow', false, 1.8, 8, null, 'bread', 0.66),
-  slime: D('slime', 'Slime', '史莱姆', '🟢', 'pop', false, 1.3, 4, null, null, 0.9),
-  shadow: D('shadow', 'Shadow', '暗影怪', '👻', 'hurt', true, 1.5, 6, null, null, 1),
+  cow: D('cow', 'Cow', 'Cow', '🐄', 'moo', false, 0.9, 10, 'milk', 'wheat', 1),
+  pig: D('pig', 'Pig', 'Pig', '🐖', 'oink', false, 1.0, 10, 'leather', 'carrot', 0.85),
+  sheep: D('sheep', 'Sheep', 'Sheep', '🐑', 'baa', false, 0.85, 8, 'wool_white', 'wheat', 0.92),
+  chicken: D('chicken', 'Chicken', 'Chicken', '🐔', 'cluck', false, 1.15, 4, 'egg', 'wheat', 0.6),
+  dog: D('dog', 'Dog', 'Dog', '🐕', 'woof', false, 2.0, 8, null, 'bread', 0.8),
+  cat: D('cat', 'Cat', 'Cat', '🐈', 'meow', false, 1.8, 8, null, 'bread', 0.66),
+  slime: D('slime', 'Slime', 'Slime', '🟢', 'pop', false, 1.3, 4, null, null, 0.9),
+  shadow: D('shadow', 'Shadow', 'Shadow', '👻', 'hurt', true, 1.5, 6, null, null, 1),
 };
 
 function mat(color: number, opacity = 1): THREE.MeshLambertMaterial {

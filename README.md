@@ -1,533 +1,533 @@
-# 方块学院 BlockAcademy · 玩家说明书
+# BlockAcademy · Player's Manual
 
-一款跑在浏览器里的**体素沙盒小学科学教育游戏**。地图上分布着六个场景，每个场景住着几位居民 NPC。
-这些 NPC **没有预写台词**——只定义性格，回答由 AI 临场生成。孩子通过自由对话、观看 3D 动态演示、动手搭建来学科学。
+A **voxel sandbox science game for elementary school** that runs right in your browser. The world has several themed areas, each home to a few resident NPCs.
+These NPCs **have no written scripts**—only a personality is defined, and their answers are generated live by AI. Kids learn science through free conversation, watching 3D animated demos, and hands-on building.
 
-> 游戏内界面文案为英文（NPC 用英语对话，可当磨耳朵），本说明书为中文对照。
+> The in-game interface text is in English (NPCs speak English, which also helps with listening practice); this manual is the English companion guide.
 
 ---
 
-## 一、开始游戏
+## 1. Getting Started
 
-| 项目 | 说明 |
+| Item | Notes |
 | --- | --- |
-| 主地址 | https://game.xuepilot.com |
-| 备用地址 | https://blockacademy.pages.dev |
-| 设备要求 | **电脑 / 平板 / 手机**都行，任意现代浏览器（Chrome、Edge、Safari），需要 WebGL |
-| 需要下载吗 | 不需要。打开网页即玩 |
-| 装到桌面 / 手机 | 支持 PWA：地址栏点「安装」，手机端「添加到主屏幕」，装后像 App 一样打开 |
-| 手机上怎么玩 | 打开后选 **BEDROCK EDITION**，底部左边是虚拟摇杆，右边是按钮，拖动屏幕空白处转视角 |
-| 性能 | 手机上会自动降分辨率、减生物数量。全部渲染在浏览器内完成，云上只是托管静态文件，换服务器不会更快 |
+| Main address | https://game.xuepilot.com |
+| Backup address | https://blockacademy.pages.dev |
+| Device requirements | Works on **computer / tablet / phone**; any modern browser (Chrome, Edge, Safari); needs WebGL |
+| Download needed? | No. Just open the webpage and play |
+| Install to desktop / phone | PWA supported: click "Install" in the address bar, or "Add to Home Screen" on mobile; then it opens like an app |
+| How to play on phone | After opening, choose **BEDROCK EDITION**. Bottom-left is a virtual joystick, right side has buttons; drag an empty area of the screen to look around |
+| Performance | On phones it auto-lowers resolution and reduces the number of creatures. Everything renders inside the browser; the cloud only hosts static files, so switching servers won't make it faster |
 
-**怎么进入第一人称？** 电脑上点击画面锁定鼠标；按 `ESC` 会弹出**暂停菜单**。手机上直接就能玩，不需要锁定。
+**How to enter first-person?** On a computer, click the screen to lock the mouse; press `ESC` to open the **pause menu**. On a phone you can play right away—no locking needed.
 
 ---
 
-## 二、JAVA EDITION 与 BEDROCK EDITION
+## 2. JAVA EDITION and BEDROCK EDITION
 
-标题页上有两个大按钮，选一个就能进：
+The title screen has two big buttons; pick one to enter:
 
-| 版本 | 适合 | 区别 |
+| Edition | For | Difference |
 | --- | --- | --- |
-| 🖥️ **JAVA EDITION** | 电脑（键盘 + 鼠标） | 完整键鼠操作；独有 **`F3` 调试屏**（显示坐标、朝向、生物数、FPS、游戏模式、时间、血量，和《我的世界》Java 版一样） |
-| 📱 **BEDROCK EDITION** | 手机 / 平板（触屏） | 左下虚拟摇杆移动，**右半屏拖动转视角**；右侧按钮组：⬆跳 / ⬇下降 / ⛏挖（长按连续挖）/ 🧱放（长按连续放）/ 🪶飞行 / 💨放屁；左上角 ☰ 菜单 / 🎒 物品栏 / 💬 命令台；**游戏锁定横屏**（竖屏时提示旋转，Android 会自动锁） |
+| 🖥️ **JAVA EDITION** | Computer (keyboard + mouse) | Full keyboard & mouse controls; has a unique **`F3` debug screen** (shows coordinates, facing, creature count, FPS, game mode, time, and health—just like Minecraft Java Edition) |
+| 📱 **BEDROCK EDITION** | Phone / tablet (touchscreen) | Bottom-left virtual joystick to move, **drag the right half of the screen to look**; right-side button group: ⬆ jump / ⬇ descend / ⛏ mine (hold to keep mining) / 🧱 place (hold to keep placing) / 🪶 fly / 💨 fart; top-left: ☰ menu / 🎒 inventory / 💬 command console; **game locks to landscape** (portrait shows a rotate hint; Android auto-locks) |
 
-第一次打开会**按设备自动选**（有触屏就选 BEDROCK），之后记住你的选择。随时可以在**暂停菜单 → 🖥️ Edition** 里切换，也可以用命令 `/edition java` / `/edition bedrock`。
+The first open auto-picks by device (touchscreen → BEDROCK), then remembers your choice. You can switch anytime in **Pause menu → 🖥️ Edition**, or with `/edition java` / `/edition bedrock`.
 
 ---
 
-## 三、基本操作
+## 3. Basic Controls
 
-### 电脑（JAVA EDITION）
+### Computer (JAVA EDITION)
 
-| 操作 | 按键 |
+| Action | Key |
 | --- | --- |
-| 移动 | `W A S D` |
-| 疾跑 | `Shift` |
-| 跳跃 | `空格` |
-| 飞行 | `F`（任意模式都能切，本作保留的便捷键） |
-| 飞行上升 / 下降 | `空格` / `Ctrl`（或 `Q`） |
-| 视角 | 移动鼠标 |
-| 挖掉方块 | 鼠标左键（**按住可连续挖**，有镐更快） |
-| 打怪 | 鼠标左键（准星对准暗影怪） |
-| 放置方块 | 鼠标右键 |
-| 切换手上方块 | 滚轮 或 数字键 `1`–`9` |
-| **打开物品栏 / 合成** | `E`（面前没人的时候）或 `I`（任何时候） |
-| 和 NPC 说话 / 触发演示台 | `E` |
-| 摸动物 / 喂动物 / 挤奶捡蛋 | `E`（走到动物旁边） |
-| **放屁** | `G` |
-| **向在线玩家挥手** | `V`（或 `/wave`） |
-| 左手挥动 | `C`（要先在物品栏的「🖐 Offhand」槽里放东西） |
-| 打开地图 | `M` |
-| 打开设置 | `O` |
-| 打开玩家面板 | `P` |
-| 打开帮助 | `H` |
-| 打开命令台 | `T` 或 `/` |
-| 调试屏 | `F3` |
-| **暂停菜单** | `ESC` |
+| Move | `W A S D` |
+| Sprint | `Shift` |
+| Jump | `Space` |
+| Fly | `F` (works in any mode; a convenience key kept in this game) |
+| Fly up / down | `Space` / `Ctrl` (or `Q`) |
+| Look | Move the mouse |
+| Mine a block | Left mouse button (hold to keep mining; faster with a pickaxe) |
+| Fight monsters | Left mouse button (aim at a Shadow) |
+| Place a block | Right mouse button |
+| Switch held block | Scroll wheel or number keys `1`–`9` |
+| **Open inventory / crafting** | `E` (when no one is in front of you) or `I` (anytime) |
+| Talk to NPC / trigger demo stage | `E` |
+| Pet / feed / milk & collect eggs | `E` (walk up to the animal) |
+| **Fart** | `G` |
+| **Wave to online players** | `V` (or `/wave`) |
+| Off-hand swing | `C` (must put something in the "🖐 Offhand" slot in inventory first) |
+| Open map | `M` |
+| Open settings | `O` |
+| Open player panel | `P` |
+| Open help | `H` |
+| Open command console | `T` or `/` |
+| Debug screen | `F3` |
+| **Pause menu** | `ESC` |
 
-### 手机（BEDROCK EDITION）
+### Phone (BEDROCK EDITION)
 
-| 想做的事 | 怎么点 |
+| Want to do | How to tap |
 | --- | --- |
-| 走路 | 左下摇杆往哪推就往哪走 |
-| 转视角 | 在屏幕**空白处拖动** |
-| 跳 / 下降 | 右侧 ⬆ / ⬇（按住） |
-| 挖方块 | 右侧 ⛏（按住可连续挖） |
-| 放方块 | 右侧 🧱 |
-| 飞行 | 右侧 🪶 开关 |
-| 放屁 | 右侧 💨 |
-| 物品栏 / 合成 | 左上 🎒 |
-| 命令台 / 聊天 | 左上 **⌘**（打开命令台；**再点一次 ⌘ 或 💬 即关闭**，也可以直接点命令台外面；不带 `/` 的输入就是聊天，同房间的人都能看到） |
-| 互动（和 NPC 聊 / 踩传送台 / 命令台开着时点它=关闭） | 左上 💬 |
-| 菜单（回标题 / 换模式 / 看聊天记录） | 左上 ☰ |
-| 和 NPC 说话、开演示台 | 走到跟前点 💬，或看屏幕下方的提示 |
+| Walk | Push the bottom-left joystick in the direction you want to go |
+| Look around | Drag on an **empty area of the screen** |
+| Jump / descend | Right-side ⬆ / ⬇ (hold) |
+| Mine a block | Right-side ⛏ (hold to keep mining) |
+| Place a block | Right-side 🧱 |
+| Fly | Right-side 🪶 toggle |
+| Fart | Right-side 💨 |
+| Inventory / crafting | Top-left 🎒 |
+| Command console / chat | Top-left **⌘** (opens the command console; **tap ⌘ or 💬 again to close**, or just tap outside the console; input without a `/` is chat, visible to everyone in the same room) |
+| Interact (talk to NPC / step on teleport pad / close console when open) | Top-left 💬 |
+| Menu (back to title / switch mode / view chat log) | Top-left ☰ |
+| Talk to NPC, open demo stage | Walk up and tap 💬, or follow the hint at the bottom of the screen |
 
 ---
 
-## 四、七个场景与居民
+## 4. The Themed Areas and Their Residents
 
-| 场景 | 主题 | 居民（命令名 / 显示名 / 身份） |
+| Scene | Theme | Residents (command name / display name / role) |
 | --- | --- | --- |
-| 🌿 Dawnlight Village 晨光村 | 植物、天气、四季 | `stone_pine` Elder Pinewood 村中长者 · `ling` Ling 爱乱跑的小探险家 |
-| 🌳 Lively Forest 生机森林 | 食物链、生态、种子 | `lu_ming` Luming 护林员 · `xiao_man` Xiaoman 种子图书馆管理员 |
-| 💧 Wandering River 漂流河谷 | 水循环、溶解、浮力 | `lan_po` Granny Lan 河流水文观察者 · `pao` Bubbles 爱吹牛的水精灵 |
-| 💎 Crystal Caverns 水晶矿洞 | 岩石、化石、地层 | `pick` Old Pick 第七代矿工 · `vein` Vein 晶脉记录员 |
-| 🔭 Starry Observatory 星空观测站 | 昼夜、四季、月相 | `star_see` Starsee 观星学徒 · `compass` Old Compass 观星台的守时人 |
-| ⚡ Wonder Lab 万物实验室 | 电、热、力、光 | `quark` Dr. Quark 首席实验员 · `ember` Keeper Ember 火焰看守 · `archie` Archie 机械大师 |
-| 🔢 Math Academy 数理学院 | **英美小学数学（四年级以上）** | `fiona` Fraction Fiona 分数披萨店店主 · `gideon` Geo Gideon 几何花园骑士 · `sylvia` Stat Sylvia 数据统计塔看守 |
+| 🌿 Dawnlight Village | Plants, weather, the four seasons | `stone_pine` Elder Pinewood village elder · `ling` Ling a little explorer who loves to wander |
+| 🌳 Lively Forest | Food chains, ecosystems, seeds | `lu_ming` Luming the forest ranger · `xiao_man` Xiaoman the seed-library keeper |
+| 💧 Wandering River | Water cycle, dissolving, buoyancy | `lan_po` Granny Lan river hydrology watcher · `pao` Bubbles a braggy water sprite |
+| 💎 Crystal Caverns | Rocks, fossils, rock layers | `pick` Old Pick the 7th-generation miner · `vein` Vein the crystal-vein recorder |
+| 🔭 Starry Observatory | Day/night, seasons, moon phases | `star_see` Starsee the stargazing apprentice · `compass` Old Compass the observatory timekeeper |
+| ⚡ Wonder Lab | Electricity, heat, force, light | `quark` Dr. Quark chief experimenter · `ember` Keeper Ember flame keeper · `archie` Archie the machine master |
+| 🔢 Math Academy | **UK/US elementary math (grade 4 and up)** | `fiona` Fraction Fiona the fraction-pizza shop owner · `gideon` Geo Gideon the geometry-garden knight · `sylvia` Stat Sylvia the data-stats tower keeper |
 
-共 **16 位**居民。在任何场景按 `E` 走到居民身边即可开聊。
+A total of **16 residents**. In any scene, walk up to a resident and press `E` to start chatting.
 
-### 🔢 数理学院（Grade 4+ 数学副本）
+### 🔢 Math Academy (Grade 4+ math dungeon)
 
-数学不是背公式，是**可以走进去的建筑**：
+Math isn't about memorizing formulas—it's **a building you can walk into**:
 
-| 区域 | 建筑 | 对应的数学 |
+| Area | Building | The math behind it |
 | --- | --- | --- |
-| 🍕 分数披萨店 | 8 等份大披萨 + 等值分数墙 | 分数意义、**1/2 = 2/4 = 4/8 等值**、通分 |
-| 📐 几何花园 | 12 射线角度转盘 + 完全对称的花园 | 角度测量（30°/60°/90°/180°）、对称轴 |
-| 📊 数据统计塔 | 5 根柱状图 + 天平 | 平均数 / 中位数 / 众数、图表读数 |
-| 🌉 比例大桥 | 每 2 格 1 根栏杆（1:2）+ 十级百分数山 | 比与比例、百分比 10%→100% |
-| 🧮 数阵广场 | 黑白棋盘地坪 + 钟楼（3 点整 = 90°） | 坐标平面、时钟角度 |
-| 🔟 东南步道 | 10 级渐变色台阶 | 小数 0.1 → 1.0 的数轴 |
+| 🍕 Fraction Pizza Shop | Giant 8-slice pizza + equivalent-fraction wall | Meaning of fractions, **1/2 = 2/4 = 4/8 equivalent**, common denominators |
+| 📐 Geometry Garden | 12-ray angle turntable + perfectly symmetrical garden | Measuring angles (30°/60°/90°/180°), lines of symmetry |
+| 📊 Data Tower | 5 bar charts + a balance scale | Mean / median / mode, reading charts |
+| 🌉 Ratio Bridge | One railing every 2 blocks (1:2) + a ten-step percent hill | Ratios & proportions, percentages 10%→100% |
+| 🧮 Number Plaza | Black-and-white checkerboard floor + clock tower (3 o'clock = 90°) | Coordinate plane, clock angles |
+| 🔟 Southeast Path | 10 gradient-colored steps | Decimals 0.1 → 1.0 on a number line |
 
-演示台：**🍕 The Pizza That Cuts Itself**（等值分数 3D 披萨）与 **📐 The Turning Ray**（角度转盘）。
+Demo stages: **🍕 The Pizza That Cuts Itself** (equivalent-fraction 3D pizza) and **📐 The Turning Ray** (angle turntable).
 
-### 💙 关于小小作者之一：Grayson
+### 💙 About one of the little authors: Grayson
 
-这个世界有两位作者——爸爸和 **Grayson**。他的印记留在晨光村：
+This world has two authors—Dad and **Grayson**. His mark is left in Dawnlight Village:
 
-- **🏠 Grayson 小屋**：村庄东北角，全村唯一一座石英墙 + 蓝屋顶 + 四角水晶柱的房子，门口有石英小路，屋顶亮着知识灯
-- **🗿 Grayson 雕像**：村庄广场西北角，蓝衣小人举着知识灯，脚边镶着一圈水晶
-- 走近小屋解锁成就「💙 Visited Grayson's House」；随时输入 `/grayson` 查看彩蛋位置
+- **🏠 Grayson's Cabin**: northeast corner of the village, the only house with quartz walls + a blue roof + crystal pillars at the four corners; a quartz path leads to the door, and a knowledge-lamp glows on the roof
+- **🗿 Grayson Statue**: northwest corner of the village square, a blue-clad figure holding a knowledge-lamp, with a ring of crystals at its feet
+- Walk up to the cabin to unlock the achievement "💙 Visited Grayson's House"; type `/grayson` anytime to see the easter-egg locations
 
 ---
 
-## 五、和 NPC 聊天（双轨大脑）
+## 5. Chatting with NPCs (Dual-Track Brain)
 
-本作的核心设计：**没有 API Key 也 100% 能玩**。
+The core design: **playable 100% without an API key**.
 
-| 模式 | 行为 |
+| Mode | Behavior |
 | --- | --- |
-| 本地知识引擎（默认） | 内置小学科学知识库 + 性格引擎即时组织语言，**不需要联网、不需要 Key** |
-| 真 LLM 驱动（可选） | 填入自己的 API Key 后，NPC 由大模型驱动，回答更自由 |
+| Local knowledge engine (default) | A built-in elementary-science knowledge base + personality engine that organizes language on the fly—**no internet, no key needed** |
+| Real LLM driven (optional) | After entering your own API Key, NPCs are driven by a large model and answer more freely |
 
-- LLM 请求失败会**自动降级**到本地引擎，并在对话里提示，不会卡住。
-- NPC 之间有「传闻总线」：你跟 A 聊过的知识点，B 会知道并换个角度讲，不会鹦鹉学舌。
+- LLM request failures **auto-fall back** to the local engine and show a note in the chat, so it never gets stuck.
+- NPCs have a "gossip bus": a fact you discussed with A, B will know and explain from another angle—no parroting.
 
-**怎么连 LLM：**
-1. 标题页点「Connect an LLM」，或游戏内按 `O`
-2. 点一个服务商预设（OpenAI / xAI Grok / DeepSeek / Kimi / 阿里千问 / 本地 Ollama）
-3. 填入 API Key 和模型名 → 点「Test connection」验证 → 点「Save」
+**How to connect an LLM:**
+1. On the title screen tap "Connect an LLM", or press `O` in-game
+2. Tap a provider preset (OpenAI / xAI Grok / DeepSeek / Kimi / Alibaba Qwen / local Ollama)
+3. Enter your API Key and model name → tap "Test connection" to verify → tap "Save"
 
-> 密钥与请求都经由同源 `/api/llm` 转发，**只存在你自己的浏览器里，服务器不保存任何密钥**。
-
----
-
-## 六、3D 演示台与任务勋章
-
-- 场景里有**发光演示台**，站上去按 `E` 播放带解说的 3D 动画（如「叶子的小工厂」「水的旅行」「地层里的时间表」）。
-- 播放中可用 `◀ Prev` / `Next ▶` / `🔁 Replay` / `Skip` 控制。
-- 左上角任务面板显示当前场景的待办：**聊天、看演示、搭方块、走远路**都会推进进度，全部完成可拿该场景勋章，共 7 枚。
+> Keys and requests are relayed through the same-origin `/api/llm` proxy; **they live only in your own browser—the server saves no keys**.
 
 ---
 
-## 七、生存循环：收集 → 合成 → 建造
+## 6. 3D Demo Stages and Quest Badges
 
-游戏**默认就是生存模式，背包空空如也**——空手打树开始，一切都得自己动手（想要自由建造就切创造：暂停菜单 → 🎮 Game Mode，或 `/gamemode creative`，切过去时若背包为空会送一套起步方块，物品栏里还有「📚 All blocks」调色板可无限取用）：
+- There are **glowing demo stages** in the world; stand on one and press `E` to play a narrated 3D animation (e.g. "The Leaf's Little Factory", "The Journey of Water", "Time Tables in the Rock Layers").
+- During playback use `◀ Prev` / `Next ▶` / `🔁 Replay` / `Skip` to control.
+- The quest panel in the top-left shows the current scene's to-dos: **chatting, watching a demo, building blocks, and taking the long way** all advance progress; finish them all to earn that scene's badge—7 badges total.
 
-1. **空手打树** → 得到 `木头`
-2. 物品栏 2×2 里放 1 个木头 → **4 个木板**
-3. 2 个木板 → **4 根木棍**
-4. 4 个木板摆成 2×2 → **工作台**
-5. 把工作台**放在地上**，站到旁边打开 3×3，就能做**镐 / 斧 / 铲 / 剑 / 锄**
-6. 8 个圆石围一圈 → **熔炉**（铁矿→铁锭、沙子→玻璃、小麦→面包）
+---
 
-### 物品栏与合成
+## 7. Survival Loop: Gather → Craft → Build
 
-| 功能 | 怎么用 |
+The game **defaults to survival mode with an empty inventory**—start by punching a tree barehanded; everything is up to you (want free building? switch to creative: Pause menu → 🎮 Game Mode, or `/gamemode creative`; when you switch, if your inventory is empty you get a starter set of blocks, and the inventory also has an "📚 All blocks" palette you can take from infinitely):
+
+1. **Punch a tree barehanded** → get `wood`
+2. Put 1 wood in the 2×2 inventory → **4 planks**
+3. 2 planks → **4 sticks**
+4. 4 planks arranged 2×2 → **crafting table**
+5. Place the crafting table **on the ground**, stand beside it and open the 3×3 grid to make **pickaxe / axe / shovel / sword / hoe**
+6. 8 cobblestone around a ring → **furnace** (iron ore→iron ingot, sand→glass, wheat→bread)
+
+### Inventory & Crafting
+
+| Function | How to use |
 | --- | --- |
-| 打开 | `E`（面前没人时）或 `I` |
-| 三个页签 | 🎒 **Bag（2×2）**随身合成 · 🪚 **Table（3×3）**要站到工作台旁 · 🔥 **Furnace**要站到熔炉旁 |
-| 拿放物品 | 点一下拿起整堆，再点空格放下；两堆相同的会自动叠起来；不同的交换位置 |
-| 取出成品 | 点右边绿色格子 → 消耗材料，成品到手上 |
-| 快捷栏 | 下方的 9 格，对应数字键 `1`–`9` |
-| **副手（左手）** | 把东西放进「🖐 Offhand」，左手才会出现在屏幕左下角，按 `C` 可以挥左手 |
-| 创造模式物品栏 | 物品栏里点「📚 All blocks」可以无限拿任何方块 |
-| 吃东西 | 手上拿着食物时点「🍽 Eat」（或快捷栏选中后点），回饥饿与血量 |
+| Open | `E` (when no one is in front) or `I` |
+| Three tabs | 🎒 **Bag (2×2)** portable crafting · 🪚 **Table (3×3)** stand beside a crafting table · 🔥 **Furnace** stand beside a furnace |
+| Pick up / put down | Tap once to grab the whole stack, tap an empty slot to drop; two identical stacks auto-merge; different ones swap places |
+| Take the product | Tap the green slot on the right → consumes materials, product goes to your hand |
+| Hotbar | The 9 slots at the bottom, mapped to number keys `1`–`9` |
+| **Off-hand (left hand)** | Put something in "🖐 Offhand" and the left hand appears at bottom-left; press `C` to swing it |
+| Creative-mode inventory | Tap "📚 All blocks" in the inventory to take any block infinitely |
+| Eat | With food in hand, tap "🍽 Eat" (or select it in the hotbar and tap), restores hunger and health |
 
-**工具分工**：镐挖石头类更快，斧砍木头更快，铲挖土沙更快，剑打怪伤害高。等级越高（木 → 石 → 铁 → 水晶）速度越快。
+**Tool roles**: pickaxes mine stone faster, axes chop wood faster, shovels dig dirt/sand faster, swords deal high damage to monsters. Higher tier (wood → stone → iron → crystal) = faster.
 
-### 🧪 化学与物理合成（真实原理）
+### 🧪 Chemistry & Physics Crafting (real principles)
 
-工作台就是**实验台**——下面每一条配方背后都是真实的科学原理：
+The crafting table is an **experiment bench**—every recipe below is backed by real science:
 
-| 合成 | 材料 | 真实原理 |
+| Craft | Materials | Real principle |
 | --- | --- | --- |
-| 🫧 二氧化碳 ×2 | 小苏打 + 醋 | **酸碱中和**：碳酸氢钠 + 醋酸 → CO₂ 大量冒泡（火山实验） |
-| 🟤 铁锈 | 铁锭 + 水 + 氧气 | **氧化反应**：铁 + 氧气 + 水缓慢生成铁锈（化学变化，不可逆） |
-| ⚪ 生石灰 | 石灰岩（熔炉） | **热分解**：CaCO₃ 高温 → CaO + CO₂（工业煅烧） |
-| 🥛 熟石灰 | 生石灰 + 水 | **放热反应**：生石灰遇水大量放热，变成氢氧化钙（可刷墙） |
-| 🪣 水泥砂浆 → ⬛ 混凝土 ×4 | 沙子 + 生石灰 + 水 | **胶凝材料**：砂浆把沙粒粘成整体，固化后比石头还硬 |
-| 🌊 盐水 → 🧂 盐（熔炉） | 盐 + 水 | **溶解**（物理变化）→ **蒸发结晶**（晒盐场原理） |
-| 🥤 糖水 | 糖 + 水 | 糖溶解：搅拌、加热都能加快溶解 |
-| 🎈 氢气 ×2 / 🌬️ 氧气 | 电池 + 水（竖着摆） | **电解水**：电池在上「负极朝下」氢气翻倍，电池在下得氧气——体积比 2:1 |
-| 💧 水 | 氢气×2 + 氧气 + 煤 | **爆鸣气实验**：2H₂ + O₂ 点燃 → 2H₂O，一声「爆」又变回水 |
-| 🔋 电池 | 铁块 + 水晶碎片 + 煤 | 把化学能变成电能的装置 |
-| 🔌 电路板 | 铜锭×8 + 玻璃 | **导体/绝缘体**：铜箔走线，玻璃纤板绝缘 |
-| 🟠 铜锭 | 铜矿石（熔炉） | 冶炼：矿石 → 金属 |
-| 🧲 磁铁 | 铁锭×3 + 水晶碎片 | 铁磁体充磁，两端（N/S 极）磁性最强 |
-| 🪞 平面镜 ×2 | 玻璃×3 + 铁块×3 | **镀银反射**：玻璃 + 银白色金属 = 镜面反射 |
-| 🔍 凸透镜 ×2 | 玻璃环（8 块） | 中间厚边缘薄 → 把平行阳光聚到焦点（焦点能点火） |
+| 🫧 Carbon dioxide ×2 | Baking soda + vinegar | **Acid-base neutralization**: NaHCO₃ + acetic acid → lots of CO₂ bubbles (volcano experiment) |
+| 🟤 Rust | Iron ingot + water + oxygen | **Oxidation**: iron + oxygen + water slowly forms rust (chemical change, irreversible) |
+| ⚪ Quicklime | Limestone (furnace) | **Thermal decomposition**: CaCO₃ heated → CaO + CO₂ (industrial calcination) |
+| 🥛 Slaked lime | Quicklime + water | **Exothermic reaction**: quicklime releases lots of heat with water, becomes calcium hydroxide (good for whitewashing) |
+| 🪣 Cement mortar → ⬛ Concrete ×4 | Sand + quicklime + water | **Cementitious material**: mortar glues sand grains into a whole; harder than stone once set |
+| 🌊 Salt water → 🧂 Salt (furnace) | Salt + water | **Dissolving** (physical change) → **evaporative crystallization** (salt-field principle) |
+| 🥤 Sugar water | Sugar + water | Sugar dissolves; stirring and heating both speed it up |
+| 🎈 Hydrogen ×2 / 🌬️ Oxygen | Battery + water (placed vertically) | **Electrolysis of water**: battery on top with "negative terminal down" doubles hydrogen; battery on bottom gives oxygen—2:1 volume ratio |
+| 💧 Water | Hydrogen×2 + oxygen + coal | **Exploding-gas experiment**: 2H₂ + O₂ ignited → 2H₂O, a "bang" and back to water |
+| 🔋 Battery | Iron block + crystal shard + coal | A device that turns chemical energy into electrical energy |
+| 🔌 Circuit board | Copper ingot×8 + glass | **Conductor/insulator**: copper traces, fiberglass board insulates |
+| 🟠 Copper ingot | Copper ore (furnace) | Smelting: ore → metal |
+| 🧲 Magnet | Iron ingot×3 + crystal shard | Iron magnet charged; poles (N/S) are strongest |
+| 🪞 Plane mirror ×2 | Glass×3 + iron block×3 | **Silvering reflection**: glass + silver-white metal = mirror reflection |
+| 🔍 Convex lens ×2 | Glass ring (8 blocks) | Thicker in the middle, thinner at edges → focuses parallel sunlight to a point (can start a fire) |
 
-配套新方块：**铜矿石 / 石灰岩 / 铁锈块 / 平面镜 / 凸透镜 / 混凝土 / 磁铁 / 二氧化碳气泡**——都能挖、都能放、都能 `/give`。
-熔炉新配方：铜锭 ← 铜矿石 · 盐 ← 盐水 · 生石灰 ← 石灰岩。
+New blocks added: **copper ore / limestone / rust block / plane mirror / convex lens / concrete / magnet / carbon-dioxide bubble**—all minable, placeable, and `/give`-able.
+New furnace recipes: copper ingot ← copper ore · salt ← salt water · quicklime ← limestone.
 
-### 新方块
-蓝花 / 粉花 / 白花 / 高草 / 干草块 / **工作台** / **熔炉** / **火把**（会发光）/ 萤石 / 书架 / 基岩（挖不动）/ 胡萝卜 / **铜矿石 / 石灰岩 / 铁锈块 / 平面镜 / 凸透镜 / 混凝土 / 磁铁 / 二氧化碳气泡**（化学物理套件）
+### New blocks
+Blue flower / pink flower / white flower / tall grass / hay block / **crafting table** / **furnace** / **torch** (glows) / glowstone / bookshelf / bedrock (unbreakable) / carrot / **copper ore / limestone / rust block / plane mirror / convex lens / concrete / magnet / carbon-dioxide bubble** (chemistry-physics kit)
 
 ---
 
-## 八、动物、宠物、朋友和天空
+## 8. Animals, Pets, Friends, and the Sky
 
-### 动物与宠物
+### Animals & Pets
 
-| 动物 | 喜欢吃的 | 空手互动能拿到 |
+| Animal | Likes to eat | Barehand interaction gives |
 | --- | --- | --- |
-| 🐄 奶牛 | 小麦 | 牛奶 |
-| 🐖 小猪 | 胡萝卜 | 皮革 |
-| 🐑 绵羊 | 小麦 | 白色羊毛 |
-| 🐔 小鸡 | 小麦 | 鸡蛋 |
-| 🐕 小狗 | 面包 | — |
-| 🐈 小猫 | 面包 | — |
-| 🟢 史莱姆 | — | — |
+| 🐄 Cow | Wheat | Milk |
+| 🐖 Pig | Carrot | Leather |
+| 🐑 Sheep | Wheat | White wool |
+| 🐔 Chicken | Wheat | Egg |
+| 🐕 Dog | Bread | — |
+| 🐈 Cat | Bread | — |
+| 🟢 Slime | — | — |
 
-**收宠物**：手上拿着它爱吃的，走到跟前按 `E`，**喂满 3 次**它就会变成你的宠物，跟着你到处跑。
-**收产品**：空手按 `E`（每只动物有 25 秒冷却）。
+**Tame a pet**: hold what it loves to eat, walk up and press `E`, **feed it 3 times** and it becomes your pet, following you around.
+**Collect produce**: press `E` barehanded (each animal has a 25-second cooldown).
 
-### 交朋友（村民）
+### Make Friends (villagers)
 
-1. 走到居民旁边按 `E` 开聊
-2. 手里拿个东西，点对话框右下角的 **🎁**
-3. 送满 **3 次**，他会说「我跟你走！」，之后会**跟着你**，而且**你放方块时他会在旁边帮你添一块**
-4. 好感度显示在屏幕左上角
+1. Walk up to a resident and press `E` to chat
+2. Hold something in your hand, tap the **🎁** at the bottom-right of the dialog
+3. After gifting **3 times**, they say "I'll follow you!", then will **follow you**, and **when you place a block they'll add one beside you**
+4. Friendship shows in the top-left corner
 
-### 天空
+### The Sky
 
-- ☀️ **太阳**白天挂在天上，🌙 **月亮**夜里接班，还带着**环形山**
-- ⭐ 入夜后**星星**渐亮（F3 里能看到当前黑暗度）
-- ☁️ **云**会慢慢飘，夜里会变暗
-- 想看昼夜交替：命令 `/cycle on`（15 分钟一轮），关掉用 `/cycle off`
-- 🌑 天黑后**暗影怪**会出现（会打你，掉点血），天亮它们自燃消失。用**剑**打退它们
-- 💀 血空了会在出生点醒来，**背包里的东西不会掉**
+- ☀️ **Sun** hangs in the sky by day, 🌙 **Moon** takes over at night, complete with **craters**
+- ⭐ After dark, **stars** gradually brighten (F3 shows current darkness)
+- ☁️ **Clouds** drift slowly, dimming at night
+- To watch the day/night cycle: command `/cycle on` (one round every 15 minutes), turn off with `/cycle off`
+- 🌑 After dark, **Shadows** appear (they hit you, costing some health); they burn away at dawn. Drive them off with your **sword**
+- 💀 When health hits zero you wake at the spawn point; **items in your bag are not lost**
 
-### 放屁
+### Farting
 
-- 按 `G`（或手机上点 💨、命令 `/fart`）
-- 有音效 + 绿色气体，**附近的动物会被熏得跳开**
-- 吃一颗**魔法豆** 🫘，吃完必放一个
-- 成就：第一次放屁 💨 / 放到 25 次 🏆
+- Press `G` (or tap 💨 on phone, or command `/fart`)
+- Has sound effect + green gas; **nearby animals get blown away**
+- Eat a **magic bean** 🫘 and you'll definitely let one out
+- Achievements: first fart 💨 / 25 farts 🏆
 
-### 成就
-第一次挖方块、第一次合成、第一次做工具、第一次吃饭、第一个宠物、第一个好朋友、第一次打退暗影怪、第一次和村民一起盖房子……达成时会弹提示。
+### Achievements
+First block mined, first craft, first tool made, first meal, first pet, first good friend, first Shadow driven off, first house built with a villager… a popup appears when achieved.
 
 ---
 
-## 九、玩家系统（多玩家存档）
+## 9. Player System (multi-player profiles)
 
-一台设备可以有多个玩家档案，互不干扰——适合家里几个孩子共用，或教室共用一台电脑。
+One device can have several player profiles that don't interfere with each other—great for several kids sharing a home, or a classroom sharing one computer.
 
-入口：标题页「👥 Players」、设置页「👥 Switch player」、游戏内按 `P`。
+Entry: title screen "👥 Players", settings "👥 Switch player", or press `P` in-game.
 
-| 能力 | 说明 |
+| Ability | Notes |
 | --- | --- |
-| 新建玩家 | 填名字 + 选头像 + 选颜色 → 「＋ Add player」 |
-| 切换玩家 | 点某一行的「切换」，游戏会同步刷新该玩家的 AI 设置、语音、进度、NPC 勋章 |
-| 删除玩家 | 点「删除」（会连带删掉该玩家的全部进度，**不可恢复**；至少保留 1 个玩家） |
-| 每人独立的内容 | AI 配置、语音开关、学习进度与勋章、**背包物品**、**聊天记录**、**村民好感**、**成就**、**版本选择**、**音量** |
-| **聊天记录** | 暂停菜单 →「💬 Chat Log」，能看到这个玩家和居民说过的每一句话（最近 300 条），可清空 |
+| New player | Fill in name + pick avatar + pick color → "＋ Add player" |
+| Switch player | Tap "Switch" on a row; the game refreshes that player's AI settings, voice, progress, and NPC badges |
+| Delete player | Tap "Delete" (also deletes all that player's progress, **cannot be undone**; keep at least 1 player) |
+| Each player's own content | AI config, voice toggle, learning progress & badges, **inventory items**, **chat log**, **villager friendship**, **achievements**, **edition choice**, **volume** |
+| **Chat log** | Pause menu → "💬 Chat Log"; see every word this player said to residents (last 300 entries), can be cleared |
 
-> ⚠️ 玩家档案存在**浏览器本地**（localStorage）。换浏览器、清缓存、换设备都不会同步——这是纯静态网页无后端的固有限制。旧版存档会在首次启动时自动迁入默认的 "Explorer" 玩家，不会丢失。
+> ⚠️ Player profiles are stored **locally in the browser** (localStorage). Switching browsers, clearing cache, or changing devices won't sync—this is a hard limit of a pure static site with no backend. Old saves auto-migrate into the default "Explorer" player on first launch, so nothing is lost.
 
 ---
 
-## 十、多人联机（测试版）
+## 10. Multiplayer (beta)
 
-游戏已升级为**多人互动**：打开网页默认自动联机，**零配置**。测试期同房间几个人足够，后续可平滑扩容。
+The game has been upgraded to **multiplayer**: open the page and it auto-connects, **zero config**. A few people in the same room is enough for testing; it can scale up smoothly later.
 
-### 怎么和别人一起玩
+### How to play with others
 
-1. 打开 https://game.xuepilot.com 即自动进入公共房间 `main`
-2. 想和朋友分开玩：暂停菜单 → **🌐 Online Players** → 改房间名 → 点「🔗 Copy invite link」把链接发给朋友（带 `?room=房间名`，打开即进同一间）
-3. 设置页（`O`）里可以换 **Broker**、改 **房间名**、或关掉联机（关掉后就是纯单人）
+1. Open https://game.xuepilot.com and you auto-enter the public room `main`
+2. To play separately with a friend: Pause menu → **🌐 Online Players** → change room name → tap "🔗 Copy invite link" and send the link to a friend (with `?room=roomname`; opening it joins the same room)
+3. In settings (`O`) you can change the **Broker**, change the **room name**, or turn off multiplayer (after which it's pure single-player)
 
-### 联机时能做什么
+### What you can do while connected
 
-| 功能 | 说明 |
+| Feature | Notes |
 | --- | --- |
-| **看到对方** | 同场景的在线玩家显示为**体素小人**（用你的头像颜色染衣服），头顶有名字牌，走动时有走路摆动 |
-| **聊天** | 打开命令台（`T` / ⌘），**不带 `/`` 直接输入**就是聊天：全房间可见，对方头顶出气泡，左下角也有浮动记录，并存进聊天记录 |
-| **挥手** | `V` 或 `/wave`，对方屏幕弹出「👋 XXX 向你挥手」且小人会举手 |
-| **放屁同步** | 你放屁，全房间看到绿色气体 + 提示（动物照样被熏跑） |
-| **一起盖世界** | 你挖掉 / 放上的每个方块都会**广播同步**，朋友看到的世界和你一样（仅同步给当时在线的人） |
-| **在线列表** | 暂停菜单 → 🌐 Online Players：显示房间、连接状态、每个人在哪个场景；顶栏也有「🟢 已联机 · 房间「xx」 · N 人在线」小胶囊 |
-| `/list online` | 命令台里查看当前房间的在线玩家 |
+| **See each other** | Online players in the same scene show as **voxel figures** (clothed in your avatar color), with a nameplate above the head and a walking wobble when moving |
+| **Chat** | Open the command console (`T` / ⌘), type **without a `/`** to chat: visible to the whole room, a bubble appears above the other person's head, a floating log appears bottom-left, and it's saved to the chat log |
+| **Wave** | `V` or `/wave`; the other screen pops "👋 XXX waved at you" and the figure raises its hand |
+| **Fart sync** | When you fart, the whole room sees the green gas + a hint (animals still get blown away) |
+| **Build the world together** | Every block you mine / place is **broadcast and synced**; friends see the same world as you (synced only to those online at the time) |
+| **Online list** | Pause menu → 🌐 Online Players: shows room, connection status, and which scene each person is in; the top bar also has a small "🟢 Online · Room "xx" · N players" pill |
+| `/list online` | View the online players in the current room from the command console |
 
-### 技术说明与如实提醒
+### Technical notes and honest reminders
 
-- 传输走 **MQTT over WSS 公共 broker**（默认 `wss://broker.emqx.io:8084/mqtt`）：纯静态站点没有 WebSocket 服务端，这是**零注册零配置**的测试期方案；设置里可随时换成自建 broker。
-- **房间名就是密码**：公共 broker 上同房间名的人才能互相看到，私密对玩请起一个别人猜不到的房间名。聊天内容经公共 broker 转发，**不要在游戏里说敏感信息**。
-- 在线状态用 MQTT **retained 消息 + 遗嘱（LWT）**实现：异常掉线（直接关页面）broker 会自动替我们清掉状态，别人立刻看到你消失；另有 7 秒心跳兜底。
-- 世界差异只做**实时增量广播**：你加入之前别人挖/放的方块不会追溯同步（地形本身是固定设计，所有人一致）。
-- 关闭联机不影响任何单人功能；断线会自动重连，顶栏胶囊会显示「🟡 连接中」。
+- Transport uses **MQTT over WSS public broker** (default `wss://broker.emqx.io:8084/mqtt`): a pure static site has no WebSocket server, so this is a **zero-registration, zero-config** testing approach; you can switch to your own broker anytime in settings.
+- **The room name is the password**: only people with the same room name on the public broker can see each other; for private play, pick a room name others can't guess. Chat goes through the public broker, so **don't share sensitive info in-game**.
+- Online status uses MQTT **retained messages + Last Will (LWT)**: on an abnormal disconnect (closing the page directly) the broker automatically clears our status, so others immediately see you vanish; there's also a 7-second heartbeat fallback.
+- World differences do only **real-time incremental broadcast**: blocks others mined/placed before you joined won't be retro-synced (the terrain itself is fixed design, identical for everyone).
+- Turning off multiplayer doesn't affect any single-player feature; on disconnect it auto-reconnects, and the top bar pill shows "🟡 Connecting".
 
 ---
 
-## 十一、命令大全（Minecraft 风格）
+## 11. Full Command List (Minecraft style)
 
-按 `T` 或 `/` 打开命令台，输入 `/help` 查看全部。
-**坐标支持 MC 式相对坐标**：`~` = 当前位置，`~10` = 偏移 +10，`~-3` = 偏移 −3。
+Press `T` or `/` to open the command console, type `/help` to see them all.
+**Coordinates support MC-style relative coords**: `~` = current position, `~10` = offset +10, `~-3` = offset −3.
 
-### 移动
-| 命令 | 示例 | 说明 |
+### Movement
+| Command | Example | Notes |
 | --- | --- | --- |
-| `/tp <x> <y> <z>` | `/tp 64 30 64` | 传送到坐标 |
-| `/tp <场景名>` | `/tp cave` | 传送到场景（支持 `village` `forest` `river` `cave` `observatory` `lab`，也认部分名字） |
-| `/tp ~ ~10 ~` | — | 相对坐标：原地上升 10 格 |
-| `/teleport ...` | `/teleport forest` | `/tp` 的完整别名 |
-| `/locate` | — | 显示当前坐标 |
-| `/fly` | — | 开关飞行 |
+| `/tp <x> <y> <z>` | `/tp 64 30 64` | Teleport to coordinates |
+| `/tp <scene name>` | `/tp cave` | Teleport to a scene (supports `village` `forest` `river` `cave` `observatory` `lab`, and some names) |
+| `/tp ~ ~10 ~` | — | Relative coords: rise 10 blocks in place |
+| `/teleport ...` | `/teleport forest` | Full alias of `/tp` |
+| `/locate` | — | Show current coordinates |
+| `/fly` | — | Toggle flight |
 
-### 建造
-| 命令 | 示例 | 说明 |
+### Building
+| Command | Example | Notes |
 | --- | --- | --- |
-| `/setblock <x> <y> <z> <方块>` | `/setblock ~ ~1 ~ lamp` | 放置单个方块 |
-| `/fill <x1> <y1> <z1> <x2> <y2> <z2> <方块>` | `/fill 60 20 60 66 24 66 brick` | 填充立方体区域 |
-| `/fill <区域> <方块> replace <目标>` | `/fill 60 20 60 66 24 66 stone replace dirt` | 只把指定方块替换掉 |
-| `/clone <区域> <tx> <ty> <tz>` | `/clone 60 20 60 66 24 66 80 20 80` | 复制区域到目标点（会连空气一起复制，即覆盖目标区） |
-| `/give <方块> [数量]` | `/give glass` | 把方块放进快捷栏（最多 18 格） |
-| `/clear` | — | 快捷栏恢复默认 10 格 |
-| `/grayson` | 别名 `/author` | 查看小小作者之一 Grayson 的彩蛋位置 |
+| `/setblock <x> <y> <z> <block>` | `/setblock ~ ~1 ~ lamp` | Place a single block |
+| `/fill <x1> <y1> <z1> <x2> <y2> <z2> <block>` | `/fill 60 20 60 66 24 66 brick` | Fill a cuboid region |
+| `/fill <region> <block> replace <target>` | `/fill 60 20 60 66 24 66 stone replace dirt` | Replace only the specified block |
+| `/clone <region> <tx> <ty> <tz>` | `/clone 60 20 60 66 24 66 80 20 80` | Copy a region to a target point (copies air too, i.e. overwrites the target) |
+| `/give <block> [count]` | `/give glass` | Put a block in the hotbar (max 18 slots) |
+| `/clear` | — | Reset hotbar to default 10 slots |
+| `/grayson` | alias `/author` | See the easter-egg location of Grayson, one of the little authors |
 
-### 世界
-| 命令 | 示例 | 说明 |
+### World
+| Command | Example | Notes |
 | --- | --- | --- |
-| `/gamemode <模式>` | `/gamemode creative` | 切换游戏模式 |
-| 模式名 | 也可用 | 效果 |
-| `creative` | `c` `1` | 开飞行 + 自由建造（**默认**） |
-| `survival` | `s` `0` | 关飞行 + 正常建造 |
-| `adventure` | `a` `2` | 关飞行 + **不能放置/挖掘** |
-| `spectator` | `sp` `3` | 开飞行 + **穿墙**（`空格`上升 /`Ctrl`下降）+ 不能建造 |
-| `/time day` | `/time night` `/time noon` `/time sunrise` | 切换时间 |
-| `/time set <0-100>` | `/time set 60` | 设置黑暗度百分比 |
-| `/time add <0-100>` | `/time add 20` | 在当前时间上推进 |
-| `/day` / `/night` | — | 快捷切到白天 / 夜晚 |
-| `/weather clear` | `/weather rain` | 切换天气 |
-| `/weather thunder` | — | 雷暴（下雨 + 变暗） |
+| `/gamemode <mode>` | `/gamemode creative` | Switch game mode |
+| mode name | also usable | effect |
+| `creative` | `c` `1` | Flight on + free building (**default**) |
+| `survival` | `s` `0` | Flight off + normal building |
+| `adventure` | `a` `2` | Flight off + **can't place/mine** |
+| `spectator` | `sp` `3` | Flight on + **pass through walls** (`Space` up / `Ctrl` down) + can't build |
+| `/time day` | `/time night` `/time noon` `/time sunrise` | Switch time |
+| `/time set <0-100>` | `/time set 60` | Set darkness percentage |
+| `/time add <0-100>` | `/time add 20` | Advance from current time |
+| `/day` / `/night` | — | Quick switch to day / night |
+| `/weather clear` | `/weather rain` | Switch weather |
+| `/weather thunder` | — | Thunderstorm (rain + darken) |
 
-### 聊天
-| 命令 | 示例 | 说明 |
+### Chat
+| Command | Example | Notes |
 | --- | --- | --- |
-| `/say <文字>` | `/say 同学们出发！` | 广播一条消息（联机时同房间玩家都能看到） |
-| `/me <文字>` | `/me 正在观察叶片` | 以「* 玩家名 文字」形式输出动作 |
-| `/wave` | — | 向所有在线玩家挥手（同 `V` 键） |
-| `/title <文字>` | `/title 第 3 关 达成` | 屏幕中央显示大字标题 |
-| `/tellraw <文字>` | `/tellraw 注意脚下` | 直接输出一条消息 |
-| `/stopsound` | — | 停止所有 NPC 朗读语音 |
-| **不带 `/` 直接输入** | `大家好！` | 联机聊天：广播给同房间的所有玩家 |
+| `/say <text>` | `/say Class, let's go!` | Broadcast a message (visible to same-room players when multiplayer) |
+| `/me <text>` | `/me is observing a leaf` | Output an action as "* player name text" |
+| `/wave` | — | Wave to all online players (same as `V`) |
+| `/title <text>` | `/title Level 3 cleared` | Show a big title in the center of the screen |
+| `/tellraw <text>` | `/tellraw Watch your step` | Output a message directly |
+| `/stopsound` | — | Stop all NPC read-aloud voice |
+| **Type without `/`** | `Hello everyone!` | Multiplayer chat: broadcast to all players in the same room |
 
-### 信息
-| 命令 | 示例 | 说明 |
+### Info
+| Command | Example | Notes |
 | --- | --- | --- |
-| `/list` | — | 列出六个场景（默认） |
-| `/list npcs` | — | 列出当前场景的居民 |
-| `/list players` | — | 列出本机所有玩家档案（`▶` 为当前） |
-| `/list online` | — | 列出联机房间里的在线玩家及所在场景 |
-| `/list blocks` | — | 列出全部方块名 |
-| `/seed` | — | 显示一个会话随机数（见下方说明） |
-| `/summon <居民>` | `/summon quark` | 在你身边召唤该居民（认 id 或名字，如 `/summon Archie`） |
+| `/list` | — | List the six scenes (default) |
+| `/list npcs` | — | List residents in the current scene |
+| `/list players` | — | List all local player profiles (`▶` = current) |
+| `/list online` | — | List online players in the multiplayer room and their scenes |
+| `/list blocks` | — | List all block names |
+| `/seed` | — | Show a session random number (see note below) |
+| `/summon <resident>` | `/summon quark` | Summon that resident beside you (by id or name, e.g. `/summon Archie`) |
 
-### 生命
-| 命令 | 示例 | 说明 |
+### Life
+| Command | Example | Notes |
 | --- | --- | --- |
-| `/kill` | — | 立即在出生点复活 |
-| `/spawnpoint [x y z]` | `/spawnpoint` / `/spawnpoint 64 30 64` | 设置重生点（不带参数 = 当前位置） |
-| `/setworldspawn [x y z]` | — | 同上（MC 别名） |
-| `/heal` | — | 回满血 |
-| `/feed` | — | 回满饥饿 |
+| `/kill` | — | Respawn at spawn point immediately |
+| `/spawnpoint [x y z]` | `/spawnpoint` / `/spawnpoint 64 30 64` | Set respawn point (no args = current position) |
+| `/setworldspawn [x y z]` | — | Same as above (MC alias) |
+| `/heal` | — | Full health |
+| `/feed` | — | Full hunger |
 
-### 生存与音画
-| 命令 | 示例 | 说明 |
+### Survival & audio/visual
+| Command | Example | Notes |
 | --- | --- | --- |
-| `/give <物品> [数量]` | `/give wood_pickaxe` / `/give bread 5` | 给物品（方块、工具、食物、资源都认） |
-| `/craft` / `/bag` | — | 直接打开物品栏（= `E`） |
-| `/fart` | — | 💨 放一个 |
-| `/mobs` | — | 列出附近的生物 |
-| `/pets` | — | 列出你的宠物 |
-| `/cycle on` | `/cycle off` | 昼夜循环开关 |
-| `/sound on` | `/sound off` | 音效开关 |
-| `/volume <0-100>` | `/volume 60` | 音量 |
-| `/edition java` | `/edition bedrock` | 切换版本（键鼠 / 触屏） |
+| `/give <item> [count]` | `/give wood_pickaxe` / `/give bread 5` | Give an item (blocks, tools, food, resources all recognized) |
+| `/craft` / `/bag` | — | Open inventory directly (= `E`) |
+| `/fart` | — | 💨 let one out |
+| `/mobs` | — | List nearby creatures |
+| `/pets` | — | List your pets |
+| `/cycle on` | `/cycle off` | Day/night cycle toggle |
+| `/sound on` | `/sound off` | Sound effect toggle |
+| `/volume <0-100>` | `/volume 60` | Volume |
+| `/edition java` | `/edition bedrock` | Switch edition (keyboard-mouse / touch) |
 
-**常用方块名**（`/give` `/setblock` `/fill` 通用，也可按 `/list blocks` 查全部）：
+**Common block names** (`/give` `/setblock` `/fill` shared; also `/list blocks` for the full list):
 `grass` `dirt` `stone` `cobble` `stone_brick` `sand` `sandstone` `wood` `leaves` `plank` `brick` `glass`
 `snow` `ice` `gravel` `coal_ore` `iron_ore` `gold_ore` `crystal_ore` `quartz`
 `wool_white` `wool_red` `wool_blue` `wool_yellow` `wool_purple` `wool_green`
 `lamp` `metal` `obsidian` `farmland` `wheat` `flower_red` `flower_yellow` `cactus` `mushroom` `star` `cloud` `portal` `board`
 `flower_blue` `flower_pink` `flower_white` `tall_grass` `hay` `crafting_table` `furnace` `torch` `glowstone` `bookshelf` `bedrock` `carrot`
 
-> 关于 `/seed`：本作每个场景的地形是**手工设计的固定地形**（所有人看到的地图一致），`/seed` 显示的随机数**不参与地形生成**，仅供记录。
+> About `/seed`: each scene's terrain in this game is **hand-designed fixed terrain** (everyone sees the same map); the random number shown by `/seed` **is not used in terrain generation**, it's just for records.
 
 ---
 
-## 十二、常见问题
+## 12. Frequently Asked Questions
 
-| 问题 | 解答 |
+| Question | Answer |
 | --- | --- |
-| 打不开网页 | 一定用 **`https://`**（带 s）。若提示 DNS 错误，刷新本机 DNS（管理员 CMD 运行 `ipconfig /flushdns`）、换无痕窗口、或暂时关掉本地代理。备用地址 `https://blockacademy.pages.dev` |
-| 命令台怎么关 | 按 `ESC`，或点命令台右上角的 **「✕ 关闭」** 按钮。手机上 **⌘ 或 💬 再点一次**即关闭，也可以直接点命令台外面的游戏区；输完点「发送」 |
-| 手机上是竖屏 | 游戏为横屏设计：Android/Chrome 点开始时会尝试自动锁定横屏；iPhone 不支持网页锁方向，会弹旋转提示，把手机横过来即可（提示里有「全屏并锁定横屏」按钮可试） |
-| 手机上命令台点不到 / 键盘不弹 | 已修复（见文末修复记录）：根因是整个命令台漏开触屏点击权限 + iOS 只在 click 类手势里肯弹键盘 + **手机 Service Worker 缓存把旧版 App 锁死在本地**（部署再多次也不更新）。现已全部修复，新版本会自动刷新生效 |
-| Groq 连接测试失败 | 确认地址是 `https://api.groq.com/openai/v1`（点设置里的 **Groq** 预设自动填），模型用 `llama-3.3-70b-versatile`；填根域名 `https://api.groq.com` 现在也会被自动纠正。测试按钮现在会透传上游真实报错（401/404 及原因） |
-| 测试 LLM 提示 "empty reply" | 多半是选了**推理型模型**（如 `openai/gpt-oss-120b`）：token 全花在"思考"上，正文为空。换成对话模型即可（`gpt-4o-mini` / `deepseek-chat` / `qwen-plus` / `grok-3-mini`） |
-| 在村里转半天出不去 | 每个传送台都有一道**冲天光柱 + 浮动图标**，跟着光柱走就行；晨光村有四条点灯的大道穿过环山直达传送台。懒得走就按 `M` 打开地图直接传送 |
-| 传送台踩不上去 / 在水面 / 在树顶 | 已全部修复（见文末修复记录）：现在所有场景的传送台都带一小块整平的空地，从出生点一定走得过去 |
-| 走到地图边缘被挡住 | 那是世界边界的隐形墙，故意的——之前没有这道墙，走出去会掉进无尽虚空 |
-| 一定要填 API Key 吗 | **不需要**。不填也能完整游玩，NPC 用内置知识引擎作答 |
-| 没网能玩吗 | 能（PWA 打开界面 + 本地知识引擎）。只有「真 LLM 驱动」需要联网 |
-| 语音朗读没声音 | 按 `O` 打开设置，点「🔊 Voice」开启；用的是浏览器自带语音合成，无需下载语音包 |
-| 游戏音效没声音 | 第一次必须**点一下屏幕**（浏览器规定音频要用户操作后才能播）；还不行就按 `ESC` →「🔊 Sound」开关，或用 `/sound on` |
-| 卡住了 / 想重来 | 按 `M` 换场景，或 `/kill` 回出生点；想清空进度请新建一个玩家 |
-| 我的进度不见了 | 玩家档案存在浏览器本地，换浏览器或清了缓存才会丢。旧版存档会自动迁入 "Explorer" 玩家 |
-| 手机上画面卡 | 自动降了分辨率。可关掉其他 App；在暂停菜单切成**冒险模式**能再省一点渲染 |
-| 手机上点不到按钮 | 确认选的是 BEDROCK EDITION（暂停菜单 → 🖥️ Edition 可切换） |
-| 联机看不到朋友 | ① 顶栏胶囊是不是「🟢 已联机」；② 两人房间名是否一致（`/list online` 可查）；③ 是否在同一场景——只有同场景才显示化身，按 `M` 传送到同一场景即可 |
-| 联机安全吗 | 房间名即密码，私密对玩起个猜不到的名字；聊天经公共 broker 转发，**不要说敏感信息**；不想联机就在设置里关掉，单人功能不受影响 |
-| 合成台打不开 | 3×3 的「🪚 Table」页签必须站在**工作台**旁边；村子里的工具房和村口都有现成的 |
-| 背包满了 | 身上 36 格满了会提示放不下，先扔掉或存到别处（本作暂无箱子） |
-| 想不费劲地盖房子 | 切回**创造模式**（暂停菜单 → 🎮 Game Mode），飞行 + 无限方块就回来了 |
+| Can't open the webpage | Always use **`https://`** (with the s). If you get a DNS error, flush your local DNS (admin CMD run `ipconfig /flushdns`), use an incognito window, or temporarily turn off your local proxy. Backup address `https://blockacademy.pages.dev` |
+| How to close the command console | Press `ESC`, or tap the **"✕ Close"** button at the top-right of the console. On phone, **tap ⌘ or 💬 again** to close, or just tap outside the console; tap "Send" when done |
+| Phone is in portrait | The game is designed for landscape: on Android/Chrome it tries to auto-lock landscape when you start; iPhone doesn't allow web pages to lock orientation, so a rotate hint pops up—just turn your phone sideways (the hint has a "Go fullscreen and lock landscape" button to try) |
+| Can't tap the console on phone / keyboard won't pop | Fixed (see fix log at the end): root cause was the whole console missing touch-click permission + iOS only pops the keyboard on click-type gestures + **the phone's Service Worker cache locked the old app locally** (redeploys never updated). All fixed now; new versions auto-refresh |
+| Groq connection test failed | Make sure the address is `https://api.groq.com/openai/v1` (tap the **Groq** preset in settings to auto-fill), model `llama-3.3-70b-versatile`; filling the root domain `https://api.groq.com` is now auto-corrected too. The test button now passes through the real upstream error (401/404 and the reason) |
+| LLM test says "empty reply" | Usually you picked a **reasoning model** (e.g. `openai/gpt-oss-120b`): all tokens went to "thinking" and the body was empty. Switch to a chat model (`gpt-4o-mini` / `deepseek-chat` / `qwen-plus` / `grok-3-mini`) |
+| Stuck wandering the village, can't get out | Every teleport pad has a **sky-high light beam + floating icon**; just follow the beam; Dawnlight Village has four lit roads through the ringed hills straight to the pad. Too lazy to walk? Press `M` to open the map and teleport directly |
+| Teleport pad unstepable / on water / on tree tops | All fixed (see fix log): now every scene's pad has a small flattened clearing, always reachable from spawn |
+| Blocked at the map edge | That's the invisible wall at the world border, intentional—without it you'd walk out into endless void |
+| Must I fill in an API Key | **No.** You can play fully without one; NPCs answer with the built-in knowledge engine |
+| Can I play without internet | Yes (PWA opens the UI + local knowledge engine). Only "real LLM driven" needs internet |
+| No sound from voice read-aloud | Press `O` to open settings, tap "🔊 Voice" to enable; uses the browser's built-in speech synthesis, no voice pack to download |
+| No sound from game effects | First time you must **tap the screen once** (browsers require a user action before audio plays); still nothing? Press `ESC` → "🔊 Sound" toggle, or use `/sound on` |
+| Stuck / want to restart | Press `M` to switch scenes, or `/kill` to return to spawn; to clear progress, make a new player |
+| My progress is gone | Player profiles are stored locally in the browser; you only lose them by switching browsers or clearing cache. Old saves auto-migrate into the "Explorer" player |
+| Phone screen laggy | Resolution was auto-lowered. Close other apps; switch to **adventure mode** in the pause menu to save a bit more rendering |
+| Can't tap buttons on phone | Make sure you're on BEDROCK EDITION (Pause menu → 🖥️ Edition to switch) |
+| Can't see friend in multiplayer | ① Is the top bar pill "🟢 Online"; ② Do the two of you have the same room name (`/list online` to check); ③ Are you in the same scene—only the same scene shows avatars; press `M` to teleport to the same scene |
+| Is multiplayer safe | Room name is the password; pick an unguessable name for private play; chat goes through the public broker, **don't share sensitive info**; don't want multiplayer? Turn it off in settings—single-player features are unaffected |
+| Can't open crafting table | The 3×3 "🪚 Table" tab requires standing **beside a crafting table**; the village tool shed and village entrance have ready-made ones |
+| Inventory full | When the 36 slots on you are full it warns you can't fit more; drop or store elsewhere (no chests yet in this game) |
+| Want to build without effort | Switch back to **creative mode** (Pause menu → 🎮 Game Mode); flight + infinite blocks return |
 
 ---
 
-## 十三、给老师 / 家长
+## 13. For Teachers / Parents
 
-- **提问示范**：NPC 对开放式问题反应最好。鼓励孩子问「为什么叶子是绿的？」「水最后去哪了？」而不是只点预设按钮。
-- **跨场景串联**：知识是连着的——同一个「水循环」在河谷讲蒸发、在观测站讲雨雪、在实验室讲三态变化。
-- **动手巩固**：任务里有「搭 10 个方块」，让孩子把理解的东西真的搭出来。
-- **隐私**：不填 Key 就零外部请求；填了 Key 也是你自己的账号，本作不收集任何数据。
+- **Question prompts**: NPCs respond best to open-ended questions. Encourage kids to ask "Why are leaves green?" "Where does water end up?" instead of just tapping preset buttons.
+- **Connect across scenes**: Knowledge is connected—the same "water cycle" is taught as evaporation in the river, as rain/snow at the observatory, and as the three states of matter in the lab.
+- **Hands-on reinforcement**: Quests include "build 10 blocks"; have the child actually build what they understood.
+- **Privacy**: No key = zero external requests; with a key it's still your own account, and the game collects no data.
 
 ---
 
-## 十四、开发者信息
+## 14. Developer Info
 
 ```bash
 npm install
-npm run dev        # http://127.0.0.1:5173（含 /api/llm 转发中间件）
+npm run dev        # http://127.0.0.1:5173 (includes /api/llm relay middleware)
 npm run build      # tsc --noEmit + vite build
-npm run serve      # 生产静态服务器 :4173
-npm run typecheck  # 类型检查
-npm run smoke      # 离线冒烟：六个场景地形 / NPC 落点 / 网格自检
+npm run serve      # production static server :4173
+npm run typecheck  # type check
+npm run smoke      # offline smoke: six-scene terrain / NPC spawn points / grid self-check
 ```
 
-- 前端：Vite 5 + TypeScript + Three.js，体素引擎全部自写，贴图为程序化生成的 canvas 图集，**不依赖任何外部图片资源**。
-- 部署：Cloudflare Pages（静态）+ Pages Functions `functions/api/llm.js` 做 SSE 转发；推到 GitHub `main` 分支由 Actions 自动部署。
-- 目录：`src/core` 体素引擎 · `src/npc` 性格与双轨大脑 · `src/edu` 知识库/任务/演示 · `src/world` 场景与地形 · `src/ui` 界面 · `src/net` 多人联机（MQTT over WSS）· `src/user/profile.ts` 玩家系统 · `server` 本地代理。
+- Frontend: Vite 5 + TypeScript + Three.js; the voxel engine is fully hand-written; textures are procedurally generated canvas atlases, **no external image assets**.
+- Deploy: Cloudflare Pages (static) + Pages Functions `functions/api/llm.js` for SSE relay; push to GitHub `main` branch and Actions deploys automatically.
+- Directories: `src/core` voxel engine · `src/npc` personality & dual-track brain · `src/edu` knowledge base/quests/demos · `src/world` scenes & terrain · `src/ui` interface · `src/net` multiplayer (MQTT over WSS) · `src/user/profile.ts` player system · `server` local proxy.
 
 ---
 
-## 附：新版本改动一览
+## Appendix: Change Log Overview
 
-| 需求 | 做法 |
+| Need | How |
 | --- | --- |
-| 想放屁 | `G` 键 / 💨 按钮 / `/fart`，有音效 + 气体 + 熏跑动物 |
-| 空背包 + 动画音效 | 生存模式背包为空；挥手、挖掘、放置、脚步、跳跃、入水等全部有程序化合成音效（不加载任何音频文件） |
-| 武器和工具 | 木 / 石 / 铁 / 水晶四档 × 镐斧铲剑锄，共 20 件，挖矿速度与剑伤害都跟档位挂钩 |
-| 村民能语音 / 聊天 | 对话用浏览器语音朗读（设置里开），聊天记录全部存档 |
-| 村庄有房子农场 | 晨光村扩建：6 座房屋 + 工具房 + 水井 + 风车 + 2 个市集摊位 + 2 片农田 + 牧场栅栏 + 干草堆 + 五种颜色的花（东北角还有 Grayson 小屋，广场西北角有 Grayson 雕像） |
-| 太阳云星星月亮 | 天空系统：会走的太阳（带光晕）/ 带环形山的月亮 / 1100 颗渐亮星星 / 26 朵飘动的云，全部跟随玩家 |
-| JAVA / BEDROCK 版本 | 标题页选，JAVA = 键鼠 + `F3` 调试屏，BEDROCK = 虚拟摇杆 + 按钮组 + 移动优先布局 |
-| 生物动物花草 | 牛 / 猪 / 羊 / 鸡 / 狗 / 猫 / 史莱姆 / 暗影怪；新增 12 种方块 |
-| 收集 → 合成 → 和村民一起盖 | 全链路：打树 → 木板 → 木棍 → 工作台 → 工具 → 熔炉；送 3 次礼物村民成为好朋友，会跟着你并帮你添方块 |
-| 右手显示左手隐藏 | 第一人称双手模型：右手常显；左手只有副手（Offhand）放了东西才出现，按 `C` 挥动 |
-| 菜单页 + 存聊天 | `ESC` 暂停菜单（继续 / 换模式 / 物品栏 / 聊天记录 / 玩家 / 帮助 / 设置 / 音效 / 版本 / 回标题）；对话按玩家存档 |
-| 更多好玩的 | 成就系统、宠物、掉落物、饥饿与血量、摔落伤害、昼夜循环、5 种新花 |
+| Want to fart | `G` key / 💨 button / `/fart`, with sound + gas + scares animals |
+| Empty inventory + animated sound effects | Survival mode starts with empty inventory; waving, mining, placing, footsteps, jumping, entering water all have procedurally synthesized sound (no audio files loaded) |
+| Weapons and tools | Wood / stone / iron / crystal four tiers × pickaxe axe shovel sword hoe, 20 pieces total; mining speed and sword damage scale with tier |
+| Villagers can voice / chat | Dialog uses browser read-aloud (enable in settings); chat log fully saved |
+| Village with houses and farms | Dawnlight Village expanded: 6 houses + tool shed + well + windmill + 2 market stalls + 2 farm plots + pasture fence + hay piles + five colors of flowers (northeast corner also has Grayson's Cabin, northwest of the square has Grayson Statue) |
+| Sun clouds stars moon | Sky system: a moving sun (with halo) / moon with craters / 1100 gradually brightening stars / 26 drifting clouds, all following the player |
+| JAVA / BEDROCK editions | Choose on title screen; JAVA = keyboard-mouse + `F3` debug screen, BEDROCK = virtual joystick + button group + mobile-first layout |
+| Creatures animals flowers | Cow / Pig / Sheep / Chicken / Dog / Cat / Slime / Shadow; 12 new blocks added |
+| Gather → craft → build with villagers | Full chain: punch tree → planks → sticks → crafting table → tools → furnace; gift 3 times to become good friends with a villager, who follows you and adds blocks for you |
+| Right hand shown, left hidden | First-person two-hand model: right hand always shown; left hand only appears when the off-hand (Offhand) has something, press `C` to swing |
+| Menu page + save chat | `ESC` pause menu (continue / switch mode / inventory / chat log / players / help / settings / sound / edition / back to title); dialog saved per player profile |
+| More fun | Achievement system, pets, dropped items, hunger & health, fall damage, day/night cycle, 5 new flowers |
 
 ---
 
-## 附二：可用性修复记录（第二批）
+## Appendix 2: Usability Fix Log (Batch 2)
 
-| 反馈 | 根因 | 修法 |
+| Feedback | Root cause | Fix |
 | --- | --- | --- |
-| 命令台不知道关 | 只能靠输入框聚焦时按 ESC，没有可见关闭入口 | 命令台加标题栏 + **✕ 关闭按钮** + 「发送」按钮；打开时明示关闭方法；焦点移出后按 T / ESC 也能关 |
-| 手机模式输不了指令、退不出去 | 输入框 focus 不在点击手势内（软键盘不弹），且没有可点的发送/关闭按钮 | ⌘ 按钮开命令台；「发送」按钮提交；✕ 关闭；触屏模式命令台挪到上半屏、输入框 16px 防 iOS 自动放大 |
-| 手机模式误触 | 命令台/物品栏/菜单开着时，触控层仍盖在界面上，一蹭就转视角 | 有任何界面开着就整体关掉触控层，关闭后自动恢复 |
-| 手机端没法跟 NPC 聊天 | 💬 按钮开的是命令台，没有对话入口 | 💬 改为「互动」：身边有 NPC 就聊天，有传送台就传送，否则才开命令台；另加 ⌘ 指令按钮 |
-| 村里翻不出去 | 村外环山 +16 格、坡度约 1.4 跳不上；传送台只有坐标没有外观 | 四条点灯大道穿过环山直达传送台；传送台加**冲天光柱 + 浮动图标**；进村 toast 指引 |
-| 走出地图掉虚空 | 世界边界没有碰撞，界外读取视为空气 | 加隐形墙（同时救回所有场景） |
-| 3 个传送台走不到 | `groundAt` 把树帽/屋顶/水当成地面，台子被架到半空 | 新增 `terrainY`（忽略树叶木头）+ `padPlaza`（清出整平小空地）；河流演示台修木栈桥连码头；实验室彩虹台从弧顶挪到弧前地面 |
+| Console has no way to close | Could only close via ESC when input focused; no visible close entry | Added a title bar + **✕ Close button** + "Send" button to the console; show how to close when opened; focus out then T/ESC also closes |
+| Phone mode can't input commands, can't exit | Input focus wasn't inside a tap gesture (keyboard won't pop), and no tappable send/close button | ⌘ button opens console; "Send" button submits; ✕ closes; touch mode console moved to upper half of screen, input 16px to prevent iOS auto-zoom |
+| Phone mode mis-taps | When console/inventory/menu open, the touch layer still covers the UI, so a brush scrolls the view | Any open UI turns off the touch layer entirely; auto-restores after closing |
+| Phone can't chat with NPC | 💬 button opened the console, no chat entry | 💬 changed to "interact": chat if NPC nearby, teleport if on a pad, otherwise open console; plus a ⌘ command button |
+| Can't get out of village | Ringed hills +16 blocks outside village, ~1.4 slope can't jump; pads had only coordinates no appearance | Four lit roads through the ringed hills straight to pads; pads get **sky-high light beam + floating icon**; village-entry toast guide |
+| Walk out of map into void | World border had no collision; reading outside was treated as air | Added invisible wall (also rescues all scenes) |
+| 3 pads unreachable | `groundAt` treated tree canopy/roof/water as ground, pads got raised into the air | Added `terrainY` (ignores leaves/wood) + `padPlaza` (clear a flattened clearing); river demo pad fixed with a wooden boardwalk to the dock; lab rainbow pad moved from arc top to the ground in front of the arc |
 
-以上修复全部有**自动化测试兜底**：`npm run smoke` 现在会对 6 个场景的 19 个传送台做 BFS 可达性检查，再出现「台子架在树上」会直接报错。
+All the above fixes have **automated tests** as a safety net: `npm run smoke` now does a BFS reachability check on 19 teleport pads across 6 scenes; if a "pad-on-a-tree" happens again it errors out directly.
 
 ---
 
-## 附三：第三批修复与升级
+## Appendix 3: Batch 3 Fixes & Upgrades
 
-| 反馈 | 根因 | 修法 |
+| Feedback | Root cause | Fix |
 | --- | --- | --- |
-| iPhone 上命令台**无法输入、无法退出** | 两个叠加 bug：① `#ui-root` 是 `pointer-events:none`，而 `#cmd-console` 漏写 `pointer-events:auto`——整个命令台（输入框/发送/✕）在触屏上**完全点不到**（桌面版只靠键盘所以没暴露）；② iOS 在 `pointerdown` 手势里调用 `focus()` 不弹软键盘 | ① 命令台显式开启 `pointer-events:auto`；② 打开命令台时同步 focus + `pointerup/click/touchend` 各补一次 focus（iOS 只在 click 类手势里肯弹键盘）；③ 触屏模式 ✕/发送加大到 44px 可点区域，输入框恒 16px 防 iOS 自动放大 |
-| 测试 LLM 提示「Connected but got empty reply」 | 模型 `openai/gpt-oss-120b` 是**推理型模型**，测试只给了 24 token 预算，全部耗在"思考"上，正文为空，被误判成"模型名错误" | 测试预算提到 800，并区分三种失败：正文为空但检测到 reasoning → 提示换对话模型；SSE 错误帧 → 透传上游报错；真的空 → 才提示检查模型名。NPC 对话路径同样识别推理模型并明确降级到本地引擎 |
-| 想要多人互动 | 纯静态站点没有 WebSocket 服务端 | 升级为多人联机（详见第十节）：MQTT over WSS 公共 broker 零配置；retained + LWT 在线状态；体素化身 + 名字牌 + 聊天气泡；聊天 / 挥手 / 放屁 / 方块编辑实时同步；房间名即密码，可随时换 broker 或关闭 |
-| 移动端可能误选 JAVA 版 | 标题页默认高亮 JAVA，触屏设备选错就没有摇杆 | 触屏设备进入 JAVA 版时弹出提醒，指引去菜单切换 BEDROCK |
+| iPhone console **can't input, can't exit** | Two stacked bugs: ① `#ui-root` is `pointer-events:none`, and `#cmd-console` missed `pointer-events:auto`—the whole console (input/send/✕) was **completely untappable** on touch (desktop only used keyboard so it didn't show); ② iOS calling `focus()` inside a `pointerdown` gesture won't pop the keyboard | ① Console explicitly enables `pointer-events:auto`; ② On open, focus + extra focus on `pointerup/click/touchend` (iOS only pops keyboard on click-type gestures); ③ Touch mode ✕/send enlarged to 44px tappable area, input always 16px to prevent iOS auto-zoom |
+| Test LLM says "Connected but got empty reply" | Model `openai/gpt-oss-120b` is a **reasoning model**; the test gave only 24 token budget, all spent "thinking", body empty, misjudged as "wrong model name" | Test budget raised to 800, and three failures distinguished: empty body but reasoning detected → hint to switch to chat model; SSE error frame → pass through upstream error; truly empty → then hint to check model name. NPC dialog path also recognizes reasoning models and explicitly falls back to the local engine |
+| Want multiplayer | Pure static site has no WebSocket server | Upgraded to multiplayer (see section 10): MQTT over WSS public broker zero-config; retained + LWT online status; voxel avatar + nameplate + chat bubble; chat / wave / fart / block-edit real-time sync; room name is password, can switch broker or turn off anytime |
+| Mobile might mis-select JAVA | Title screen highlights JAVA by default; touch devices pick wrong and get no joystick | Touch devices entering JAVA show a reminder to switch to BEDROCK in the menu |
 
-联机协议有**端到端自检**兜底（双客户端互见 presence / 聊天 / 方块编辑 / 遗嘱清人），开发机可临时重跑：连公共 broker 模拟两个客户端收发全部消息类型。
+The multiplayer protocol has an **end-to-end self-check** safety net (two clients see each other's presence / chat / block-edit / will-clear), which can be re-run temporarily on the dev machine: connect to the public broker and simulate two clients sending/receiving all message types.
 
 ---
 
-## 附四：第四批修复（手机端命令台复发 + Groq 连通性 + 空背包开局）
+## Appendix 4: Batch 4 Fixes (phone console relapse + Groq connectivity + empty-inventory start)
 
-| 反馈 | 根因 | 修法 |
+| Feedback | Root cause | Fix |
 | --- | --- | --- |
-| iPhone 上命令台**始终**无法弹键盘、无法关闭，点 💬 多少次都没用 | ① **PWA Service Worker 是 cache-first**：旧 SW 把旧 `index.html` 连同旧 bundle 永久锁在手机本地，服务端部署再多次，手机打开的一直是旧代码——所以之前的修复"不生效"；② 💬 按钮在命令台已打开时只会再次 `openConsole()`，没有关闭分支 | ① SW 改版：页面导航**网络优先**（失败才回落缓存），静态资源 stale-while-revalidate，新 SW 接管时自动刷新一次；且改用**带版本号的文件名 `sw.v3.js`** 注册（固定名 sw.js 会被缓存 4 小时，新 SW 迟迟不能上岗），`_headers` 对 `sw.js`/`sw.v3.js`/`index.html` 禁缓存；② 💬 / ⌘ 都改成**开关**：命令台开着再点一次即关闭 |
-| 测试 Groq 连通依然失败 | ① 通用 URL 归一化把 `https://api.groq.com` 拼成 `/v1`（Groq 的版本路径是 **`/openai/v1`**）→ 404；② 测试函数把代理层返回的 JSON 错误当成 SSE 流解析，真实报错被吞掉、仍显示"empty reply" | ① 两个代理（CF Pages / 本地 dev）都加 Groq 分支归一化；设置里新增 **Groq 预设**（地址 + 推荐模型自动填）；② 测试遇非 200 先读出上游错误原文透传，并按 baseUrl 判断给出 Groq 专属提示 |
-| 儿子需求"背包一开始是空的"未达成 | 默认是**创造模式**且启动即送 9 格起步方块 | 默认改**生存模式**、启动不再送任何东西（空背包开局自己伐木合成）；切创造时若背包为空才送起步块，另有调色板 |
+| iPhone console **always** can't pop keyboard, can't close, tapping 💬 any number of times does nothing | ① **PWA Service Worker is cache-first**: old SW permanently locked the old `index.html` along with the old bundle in the phone's local storage; however many times the server deployed, the phone kept opening old code—so previous fixes "didn't take"; ② 💬 button, when the console was already open, only called `openConsole()` again, with no close branch | ① SW revamped: page navigation is **network-first** (fall back to cache on failure), static assets stale-while-revalidate, new SW auto-refreshes once on takeover; and registers with a **versioned filename `sw.v3.js`** (fixed name sw.js gets cached for 4 hours, new SW can't take over); `_headers` disables cache for `sw.js`/`sw.v3.js`/`index.html`; ② 💬 / ⌘ both changed to **toggles**: console open, tap again to close |
+| Groq connectivity test still fails | ① Generic URL normalization joined `https://api.groq.com` into `/v1` (Groq's version path is **`/openai/v1`**) → 404; ② Test function parsed the proxy layer's returned JSON error as an SSE stream, swallowing the real error and still showing "empty reply" | ① Both proxies (CF Pages / local dev) add a Groq branch for normalization; settings adds a **Groq preset** (address + recommended model auto-filled); ② On non-200, test first reads the upstream error text and passes it through, and gives a Groq-specific hint based on baseUrl |
+| Son's need "inventory empty at start" not met | Default was **creative mode** and started by giving 9 starter blocks | Default changed to **survival mode**, no longer gives anything at start (empty-inventory start, chop wood and craft yourself); switching to creative gives starter blocks only if inventory is empty, plus a palette |
 
-Groq 的正确配置：地址 `https://api.groq.com/openai/v1`，模型 `llama-3.3-70b-versatile`（免费额度、速度快；`gpt-oss` 系列是推理模型，NPC 对话会明显变慢）。
+Groq correct config: address `https://api.groq.com/openai/v1`, model `llama-3.3-70b-versatile` (free quota, fast; the `gpt-oss` series are reasoning models and NPC dialog will be noticeably slower).
 
-> 📱 **手机用户注意**：如果升级后打开还是旧界面，是旧版 PWA 缓存在作怪。现在新版本部署后**会自动刷新一次**；若仍未更新，把标签页关掉重新打开即可（iOS 上也可在 Safari 标签页管理里左滑关闭后重开）。
+> 📱 **Phone users note**: if after upgrading you still see the old UI, it's the old PWA cache acting up. New versions now **auto-refresh once** on deploy; if still not updated, close the tab and reopen (on iOS you can also swipe-close in Safari's tab manager and reopen).
 
 ---
 
-## 附五：第五批（数理学院 + 化学物理合成）
+## Appendix 5: Batch 5 (Math Academy + chemistry/physics crafting)
 
-**新增内容**
-- **第七个场景「Math Academy 数理学院」**：英美小学四年级以上数学（CCSSM）变成可走进去的建筑——分数披萨店（1/2=2/4=4/8 等值墙）、几何花园（12 射线角度盘 + 完全对称花园）、数据统计塔（柱状图 + 天平）、比例大桥（栏杆 1:2 + 十级百分数山）、数阵广场（坐标棋盘 + 钟楼 3 点整 = 90°）、小数步道（0.1→1.0 渐变色台阶）。
-- **3 位数学 NPC**：Fraction Fiona 🍕 / Geo Gideon 📐 / Stat Sylvia 📊，性格依旧只定人格不定台词。
-- **数学知识库第五域「Mathematics」**：28 个知识点（分数、小数、比与百分比、表达式方程、角度、三角形、对称、面积周长体积、坐标、单位换算、统计、概率、负数……），本地引擎与 LLM 双轨都能讲。
-- **3 个新 3D 演示**：🍕 The Pizza That Cuts Itself（等值分数）、📐 The Turning Ray（角度转盘）、🌋 Volcano in a Flask（酸碱火山，挂实验室）。
-- **化学 / 物理合成大扩充**：43 → **61 条配方**，新增酸碱中和、氧化生锈、石灰石热分解、生石灰放热、电解水、爆鸣气、溶解与结晶、水泥砂浆、镀银镜、凸透镜、磁铁、电路板；新方块铜矿石/石灰岩/铁锈块/平面镜/凸透镜/混凝土/磁铁/二氧化碳气泡（贴图槽位 8×8=64 已满，图集扩容到 12×12=144）。
+**New content**
+- **Seventh scene "Math Academy"**: UK/US elementary math grade 4+ (CCSSM) turned into walkable buildings—fraction pizza shop (1/2=2/4=4/8 equivalent wall), geometry garden (12-ray angle dial + perfectly symmetrical garden), data tower (bar charts + balance), ratio bridge (railings 1:2 + ten-step percent hill), number plaza (coordinate checkerboard + clock tower 3 o'clock = 90°), decimal path (0.1→1.0 gradient steps).
+- **3 math NPCs**: Fraction Fiona 🍕 / Geo Gideon 📐 / Stat Sylvia 📊, personalities still define character not lines.
+- **Math knowledge base fifth domain "Mathematics"**: 28 knowledge points (fractions, decimals, ratios & percentages, expressions & equations, angles, triangles, symmetry, area perimeter volume, coordinates, unit conversion, statistics, probability, negatives…), both local engine and LLM can teach.
+- **3 new 3D demos**: 🍕 The Pizza That Cuts Itself (equivalent fractions), 📐 The Turning Ray (angle dial), 🌋 Volcano in a Flask (acid-base volcano, hung in the lab).
+- **Big chemistry / physics crafting expansion**: 43 → **61 recipes**, adding acid-base neutralization, oxidation rusting, limestone thermal decomposition, quicklime exothermic, electrolysis of water, exploding gas, dissolving & crystallization, cement mortar, silvering mirror, convex lens, magnet, circuit board; new blocks copper ore/limestone/rust block/plane mirror/convex lens/concrete/magnet/carbon-dioxide bubble (atlas slot 8×8=64 full, atlas expanded to 12×12=144).
 
-**顺带修复的真 bug**
-- 天文台传送台（88,92）**概率性不可达**：悬空星星块把 `groundY` 抬到 30+ 格高，传送台被架到星星上。改为 pad 用 `terrainY`（忽略悬空装饰）并在放置前清空台子上方天空。
-- 村庄东南传送台不可达：树冠残留（`gateRoad` 只清 5 格高）把台子围住；清空高度加到 10 格并修一条直达大道。
-- **explore 探索任务从未被计入**（森林/学院的「走 30 格」任务以前永远完不成）：主循环补了离出生点距离检查，每 0.5s 一次。
+**Real bugs fixed along the way**
+- Observatory teleport pad (88,92) **probabilistically unreachable**: floating star blocks raised `groundY` to 30+ blocks high, pad got mounted on the stars. Changed pad to use `terrainY` (ignores floating decoration) and clear the sky above the pad before placing.
+- Village southeast pad unreachable: tree canopy remnants (`gateRoad` only cleared 5 blocks high) walled the pad in; raised clear height to 10 blocks and fixed a direct road.
+- **explore quest never counted** (forest/academy "walk 30 blocks" quest could never complete before): main loop added a distance-from-spawn check, once every 0.5s.

@@ -488,7 +488,7 @@ export function buildAtlas(): THREE.Texture {
   let slot = 0;
   for (const key of Object.keys(TILES)) {
     if (slot >= GRID * GRID) {
-      console.warn(`[atlas] 贴图槽位已满(64)，${key} 无法放入，会显示为空气`);
+      console.warn(`[atlas] Tile slots full (64), ${key} couldn't fit and will show as air`);
       continue;
     }
     const col = slot % GRID;

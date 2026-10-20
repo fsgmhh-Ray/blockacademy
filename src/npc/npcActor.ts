@@ -436,10 +436,10 @@ export function pickVoice(p: Personality): SpeechSynthesisVoice | null {
     voices.push(...(window.speechSynthesis?.getVoices() ?? []));
     voicesLoaded = true;
   }
-  const zh = voices.filter((v) => /zh|Chinese/i.test(v.lang));
-  if (!zh.length) return null;
+  const en = voices.filter((v) => /en|English/i.test(v.lang));
+  if (!en.length) return null;
   const seed = [...p.id].reduce((a, c) => a + c.charCodeAt(0), 0);
-  return zh[seed % zh.length];
+  return en[seed % en.length];
 }
 
 export function say(p: Personality, text: string): void {
@@ -449,7 +449,7 @@ export function say(p: Personality, text: string): void {
     const u = new SpeechSynthesisUtterance(text.replace(/[（）()*]/g, '').slice(0, 220));
     const v = pickVoice(p);
     if (v) u.voice = v;
-    u.lang = 'zh-CN';
+    u.lang = 'en-US';
     u.rate = p.voiceRate;
     u.pitch = p.voicePitch;
     window.speechSynthesis.speak(u);

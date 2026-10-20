@@ -1068,11 +1068,15 @@ body.touch-mode #cmd-head .cmd-tip {
   background: rgba(200, 60, 60, 0.55);
   color: #fff;
 }
-/* 手机模式：命令台顶到最上面（横屏也不会被藏住），软键盘弹起来也不会挡住 */
+/* 手机模式：命令台顶到最上面（横屏也不会被藏住），软键盘弹起来也不会挡住。
+   关键：用 position:fixed 相对「视觉视口」定位，软键盘弹出/转屏时不会被顶出屏幕，
+   保证右上角 ✕ 关闭按钮在第一次打开时就可见、可点。 */
 body.touch-mode #cmd-console {
+  position: fixed;
   bottom: auto;
-  top: max(8px, env(safe-area-inset-top));
+  top: calc(env(safe-area-inset-top, 0px) + 8px);
   width: min(680px, 94vw);
+  max-height: calc(100dvh - 16px);
 }
 body.touch-mode #cmd-input {
   font-size: 16px; /* iOS 聚焦时小于 16px 会自动放大页面 */

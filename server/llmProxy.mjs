@@ -12,10 +12,10 @@ export async function proxyLLM(req, res, body) {
     let baseUrl = String(cfg.baseUrl || '').trim();
 
     if (!baseUrl) {
-      return sendJSON(res, 400, { error: '缺少 baseUrl：请先在设置面板填写 API 地址' });
+      return sendJSON(res, 400, { error: 'Missing baseUrl: fill in the API address in the settings panel first' });
     }
     if (!apiKey) {
-      return sendJSON(res, 400, { error: '缺少 apiKey：请先在设置面板填写密钥' });
+      return sendJSON(res, 400, { error: 'Missing apiKey: fill in the API key in the settings panel first' });
     }
 
     // URL 归一化：用户可能填到 /chat/completions、/v1、或根域名
@@ -55,7 +55,7 @@ export async function proxyLLM(req, res, body) {
       });
     } catch (e) {
       clearTimeout(timer);
-      return sendJSON(res, 502, { error: `无法连接到 ${upstream}：${e?.message || e}` });
+      return sendJSON(res, 502, { error: `Cannot connect to ${upstream}: ${e?.message || e}` });
     }
 
     if (!upstreamRes.ok || !upstreamRes.body) {
@@ -68,7 +68,7 @@ export async function proxyLLM(req, res, body) {
       } catch {
         /* keep raw text */
       }
-      return sendJSON(res, upstreamRes.status, { error: `上游返回 ${upstreamRes.status}：${detail}` });
+      return sendJSON(res, upstreamRes.status, { error: `Upstream returned ${upstreamRes.status}: ${detail}` });
     }
 
     res.writeHead(200, {
@@ -104,7 +104,7 @@ export async function proxyLLM(req, res, body) {
       }
     }
   } catch (e) {
-    sendJSON(res, 500, { error: `代理内部错误：${e?.message || e}` });
+    sendJSON(res, 500, { error: `Proxy internal error: ${e?.message || e}` });
   }
 }
 

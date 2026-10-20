@@ -48,20 +48,20 @@ const BLOCK_ICON: Record<string, string> = {
 };
 
 const BLOCK_CN: Record<string, string> = {
-  grass: '草方块', dirt: '泥土', stone: '石头', cobble: '圆石', stone_brick: '石砖',
-  sand: '沙子', sandstone: '砂岩', water: '水', lava: '岩浆', wood: '木头',
-  leaves: '树叶', plank: '木板', brick: '砖块', glass: '玻璃', snow: '雪',
-  ice: '冰', gravel: '沙砾', coal_ore: '煤矿石', iron_ore: '铁矿石', gold_ore: '金矿石',
-  crystal_ore: '水晶矿石', quartz: '石英块', wool_white: '白色羊毛', wool_red: '红色羊毛',
-  wool_blue: '蓝色羊毛', wool_yellow: '黄色羊毛', wool_purple: '紫色羊毛', wool_green: '绿色羊毛',
-  lamp: '知识灯', metal: '铁块', obsidian: '黑曜石', farmland: '耕地', wheat: '小麦',
-  flower_red: '红花', flower_yellow: '黄花', flower_blue: '蓝花', flower_pink: '粉花',
-  flower_white: '白花', tall_grass: '高草', hay: '干草块', crafting_table: '工作台',
-  furnace: '熔炉', torch: '火把', glowstone: '萤石', bookshelf: '书架', cactus: '仙人掌',
-  mushroom: '蘑菇', star: '星星块', cloud: '云', portal: '传送石', board: '知识板',
-  bedrock: '基岩', carrot: '胡萝卜',
-  copper_ore: '铜矿石', limestone: '石灰岩', rust_block: '铁锈块', mirror: '平面镜',
-  lens: '凸透镜', concrete: '混凝土', magnet: '磁铁', gas: '二氧化碳气泡',
+  grass: 'Grass', dirt: 'Dirt', stone: 'Stone', cobble: 'Cobblestone', stone_brick: 'Stone Bricks',
+  sand: 'Sand', sandstone: 'Sandstone', water: 'Water', lava: 'Lava', wood: 'Wood Log',
+  leaves: 'Leaves', plank: 'Planks', brick: 'Bricks', glass: 'Glass', snow: 'Snow',
+  ice: 'Ice', gravel: 'Gravel', coal_ore: 'Coal Ore', iron_ore: 'Iron Ore', gold_ore: 'Gold Ore',
+  crystal_ore: 'Crystal Ore', quartz: 'Quartz Block', wool_white: 'White Wool', wool_red: 'Red Wool',
+  wool_blue: 'Blue Wool', wool_yellow: 'Yellow Wool', wool_purple: 'Purple Wool', wool_green: 'Green Wool',
+  lamp: 'Knowledge Lamp', metal: 'Iron Block', obsidian: 'Obsidian', farmland: 'Farmland', wheat: 'Wheat',
+  flower_red: 'Red Flower', flower_yellow: 'Yellow Flower', flower_blue: 'Blue Flower', flower_pink: 'Pink Flower',
+  flower_white: 'White Flower', tall_grass: 'Tall Grass', hay: 'Hay Bale', crafting_table: 'Crafting Table',
+  furnace: 'Furnace', torch: 'Torch', glowstone: 'Glowstone', bookshelf: 'Bookshelf', cactus: 'Cactus',
+  mushroom: 'Mushroom', star: 'Star Block', cloud: 'Cloud', portal: 'Portal Stone', board: 'Knowledge Board',
+  bedrock: 'Bedrock', carrot: 'Carrot',
+  copper_ore: 'Copper Ore', limestone: 'Limestone', rust_block: 'Rusted Iron Block', mirror: 'Mirror',
+  lens: 'Magnifying Lens', concrete: 'Concrete', magnet: 'Magnet', gas: 'Carbon Dioxide Bubble',
 };
 
 // ── 每个方块都自动成为一个可放置物品
@@ -78,60 +78,60 @@ for (const b of BLOCK_LIST) {
 }
 
 // ───────── 资源 ─────────
-def({ key: 'stick', name: 'Stick', cn: '木棍', icon: '🥢', kind: 'resource', desc: '合成一切工具的手柄' });
-def({ key: 'iron_ingot', name: 'Iron Ingot', cn: '铁锭', icon: '🔩', kind: 'resource', desc: '熔炼铁矿石得到' });
-def({ key: 'gold_ingot', name: 'Gold Ingot', cn: '金锭', icon: '🪙', kind: 'resource', desc: '熔炼金矿石得到' });
-def({ key: 'crystal_shard', name: 'Crystal Shard', cn: '水晶碎片', icon: '💎', kind: 'resource', desc: '熔炼水晶矿石得到' });
-def({ key: 'coal', name: 'Coal', cn: '煤', icon: '⚫', kind: 'resource', desc: '挖煤矿掉落' });
-def({ key: 'feather', name: 'Feather', cn: '羽毛', icon: '🪶', kind: 'resource', desc: '鸡给的礼物' });
-def({ key: 'leather', name: 'Leather', cn: '皮革', icon: '🧵', kind: 'resource', desc: '牛给的礼物' });
-def({ key: 'egg', name: 'Egg', cn: '鸡蛋', icon: '🥚', kind: 'resource', desc: '母鸡下的蛋' });
-def({ key: 'milk', name: 'Milk', cn: '牛奶', icon: '🥛', kind: 'resource', desc: '挤牛奶得到' });
-def({ key: 'flour', name: 'Flour', cn: '面粉', icon: '🌾', kind: 'resource', desc: '小麦磨的面粉' });
-def({ key: 'bean', name: 'Magic Bean', cn: '魔法豆', icon: '🫘', kind: 'food', heal: 1, desc: '吃了会……噗！' });
+def({ key: 'stick', name: 'Stick', cn: 'Stick', icon: '🥢', kind: 'resource', desc: 'The handle for crafting every tool' });
+def({ key: 'iron_ingot', name: 'Iron Ingot', cn: 'Iron Ingot', icon: '🔩', kind: 'resource', desc: 'Made by smelting iron ore' });
+def({ key: 'gold_ingot', name: 'Gold Ingot', cn: 'Gold Ingot', icon: '🪙', kind: 'resource', desc: 'Made by smelting gold ore' });
+def({ key: 'crystal_shard', name: 'Crystal Shard', cn: 'Crystal Shard', icon: '💎', kind: 'resource', desc: 'Made by smelting crystal ore' });
+def({ key: 'coal', name: 'Coal', cn: 'Coal', icon: '⚫', kind: 'resource', desc: "Drops when you mine coal ore" });
+def({ key: 'feather', name: 'Feather', cn: 'Feather', icon: '🪶', kind: 'resource', desc: 'A gift from chickens' });
+def({ key: 'leather', name: 'Leather', cn: 'Leather', icon: '🧵', kind: 'resource', desc: 'A gift from cows' });
+def({ key: 'egg', name: 'Egg', cn: 'Egg', icon: '🥚', kind: 'resource', desc: 'Laid by hens' });
+def({ key: 'milk', name: 'Milk', cn: 'Milk', icon: '🥛', kind: 'resource', desc: 'Get it by milking a cow' });
+def({ key: 'flour', name: 'Flour', cn: 'Flour', icon: '🌾', kind: 'resource', desc: 'Ground from wheat' });
+def({ key: 'bean', name: 'Magic Bean', cn: 'Magic Bean', icon: '🫘', kind: 'food', heal: 1, desc: 'Eat it and... pop!' });
 
 // ───────── 化学实验材料（真实反应原理，见合成表） ─────────
-def({ key: 'salt', name: 'Salt', cn: '盐', icon: '🧂', kind: 'resource', desc: '海水晒出来的盐——溶在水里就看不见了（溶解）' });
-def({ key: 'sugar', name: 'Sugar', cn: '糖', icon: '🍬', kind: 'resource', desc: '甘蔗/甜菜里的糖，加热会变成焦糖（化学变化）' });
-def({ key: 'baking_soda', name: 'Baking Soda', cn: '小苏打', icon: '🧴', kind: 'resource', desc: '碳酸氢钠，遇上酸就会大量冒泡（酸碱中和）' });
-def({ key: 'vinegar', name: 'Vinegar', cn: '醋', icon: '🫗', kind: 'resource', desc: '含醋酸的酸——和小苏打是经典搭档' });
-def({ key: 'co2', name: 'Carbon Dioxide', cn: '二氧化碳', icon: '🫧', kind: 'resource', desc: '无色气体，比空气重，能浇灭火焰（隔绝氧气）' });
-def({ key: 'saltwater', name: 'Salt Water', cn: '盐水', icon: '🌊', kind: 'resource', desc: '盐溶解在水里形成的溶液，晒一晒盐会重新结晶出来' });
-def({ key: 'sugar_water', name: 'Sugar Water', cn: '糖水', icon: '🥤', kind: 'food', heal: 2, desc: '糖溶解在水里——喝一口，甜到心里' });
-def({ key: 'rust', name: 'Rust', cn: '铁锈', icon: '🟤', kind: 'resource', desc: '铁和氧气、水一起发生的缓慢氧化（化学变化，回不去）' });
-def({ key: 'quicklime', name: 'Quicklime', cn: '生石灰', icon: '⚪', kind: 'resource', desc: '石灰石高温煅烧的产物（CaCO₃ → CaO + CO₂），遇水会放热' });
-def({ key: 'slaked_lime', name: 'Slaked Lime', cn: '熟石灰', icon: '🥛', kind: 'resource', desc: '生石灰加水反应放出大量热，能刷墙（氢氧化钙）' });
-def({ key: 'hydrogen', name: 'Hydrogen', cn: '氢气', icon: '🎈', kind: 'resource', desc: '最轻的气体，电解水在负极得到它——遇火会"爆"的一声（爆鸣气实验）' });
-def({ key: 'oxygen', name: 'Oxygen', cn: '氧气', icon: '🌬️', kind: 'resource', desc: '电解水在正极得到它，支持燃烧——带火星的木条会复燃' });
-def({ key: 'copper_ingot', name: 'Copper Ingot', cn: '铜锭', icon: '🟠', kind: 'resource', desc: '熔炼铜矿石得到——导电性仅次于银，电线都用它' });
-def({ key: 'battery', name: 'Battery', cn: '电池', icon: '🔋', kind: 'resource', desc: '把化学能变成电能的装置——电解水就靠它供电' });
-def({ key: 'circuit', name: 'Circuit Board', cn: '电路板', icon: '🔌', kind: 'resource', desc: '铜箔走在绝缘板上，电流在铜里流动（导体/绝缘体）' });
-def({ key: 'concrete_mix', name: 'Concrete Mix', cn: '水泥砂浆', icon: '🪣', kind: 'resource', desc: '沙子 + 生石灰 + 水，真正的建筑胶凝材料' });
+def({ key: 'salt', name: 'Salt', cn: 'Salt', icon: '🧂', kind: 'resource', desc: 'Salt from evaporated seawater — stir it in water and it vanishes (that’s dissolving)' });
+def({ key: 'sugar', name: 'Sugar', cn: 'Sugar', icon: '🍬', kind: 'resource', desc: 'Sugar from sugarcane or beets. Heat it and it turns to caramel — a real chemical change' });
+def({ key: 'baking_soda', name: 'Baking Soda', cn: 'Baking Soda', icon: '🧴', kind: 'resource', desc: 'Baking soda (sodium bicarbonate). Mix it with something acidic and it fizzes like crazy (acid + base!)' });
+def({ key: 'vinegar', name: 'Vinegar', cn: 'Vinegar', icon: '🫗', kind: 'resource', desc: 'Vinegar — it’s an acid, and baking soda is its classic bubbly partner' });
+def({ key: 'co2', name: 'Carbon Dioxide', cn: 'Carbon Dioxide', icon: '🫧', kind: 'resource', desc: 'A colorless gas, heavier than air. It can smother flames by keeping oxygen away' });
+def({ key: 'saltwater', name: 'Salt Water', cn: 'Salt Water', icon: '🌊', kind: 'resource', desc: 'Salt dissolved in water. Leave it in the sun and the salt crystals come back' });
+def({ key: 'sugar_water', name: 'Sugar Water', cn: 'Sugar Water', icon: '🥤', kind: 'food', heal: 2, desc: 'Sugar dissolved in water — take a sip, it’s sweet to the core' });
+def({ key: 'rust', name: 'Rust', cn: 'Rust', icon: '🟤', kind: 'resource', desc: 'Iron + oxygen + water = slow rusting (a chemical change you can’t undo)' });
+def({ key: 'quicklime', name: 'Quicklime', cn: 'Quicklime', icon: '⚪', kind: 'resource', desc: 'Made by roasting limestone (CaCO₃ → CaO + CO₂). Splash it with water and it gets hot!' });
+def({ key: 'slaked_lime', name: 'Slaked Lime', cn: 'Slaked Lime', icon: '🥛', kind: 'resource', desc: 'Quicklime plus water makes heat and slaked lime (calcium hydroxide) — the stuff for whitewashing walls' });
+def({ key: 'hydrogen', name: 'Hydrogen', cn: 'Hydrogen', icon: '🎈', kind: 'resource', desc: 'The lightest gas. Split water with a battery and it shows up at the negative end — and it goes "pop" near a flame' });
+def({ key: 'oxygen', name: 'Oxygen', cn: 'Oxygen', icon: '🌬️', kind: 'resource', desc: 'Also from splitting water (at the positive end). It feeds fire — a glowing splint bursts back into flame' });
+def({ key: 'copper_ingot', name: 'Copper Ingot', cn: 'Copper Ingot', icon: '🟠', kind: 'resource', desc: 'Made by smelting copper ore. It carries electricity almost as well as silver, so wires use it' });
+def({ key: 'battery', name: 'Battery', cn: 'Battery', icon: '🔋', kind: 'resource', desc: 'Turns chemical energy into electricity — it’s what powers splitting water' });
+def({ key: 'circuit', name: 'Circuit Board', cn: 'Circuit Board', icon: '🔌', kind: 'resource', desc: 'Copper tracks on an insulator. Electricity flows through the copper (conductor) but not the board (insulator)' });
+def({ key: 'concrete_mix', name: 'Concrete Mix', cn: 'Concrete Mix', icon: '🪣', kind: 'resource', desc: 'Sand + quicklime + water: the real glue that holds buildings together' });
 
 // ───────── 食物 ─────────
-def({ key: 'bread', name: 'Bread', cn: '面包', icon: '🍞', kind: 'food', heal: 5, desc: '香喷喷的面包' });
-def({ key: 'apple', name: 'Apple', cn: '苹果', icon: '🍎', kind: 'food', heal: 4, desc: '从树上摘的' });
-def({ key: 'cake', name: 'Cake', cn: '蛋糕', icon: '🍰', kind: 'food', heal: 8, desc: '生日快乐！' });
+def({ key: 'bread', name: 'Bread', cn: 'Bread', icon: '🍞', kind: 'food', heal: 5, desc: 'A warm, tasty loaf of bread' });
+def({ key: 'apple', name: 'Apple', cn: 'Apple', icon: '🍎', kind: 'food', heal: 4, desc: 'Picked fresh from a tree' });
+def({ key: 'cake', name: 'Cake', cn: 'Cake', icon: '🍰', kind: 'food', heal: 8, desc: 'Happy birthday!' });
 
 // 胡萝卜既是作物也是食物，直接啃一口也很脆
 const carrotItem = BY_KEY.get('carrot');
 if (carrotItem) {
   carrotItem.heal = 3;
-  carrotItem.desc = '脆生生的胡萝卜，可以直接啃';
+  carrotItem.desc = 'A crunchy carrot — you can bite right into it';
 }
 const wheatItem = BY_KEY.get('wheat');
-if (wheatItem) wheatItem.desc = '小麦，磨成面粉就能烤面包';
+if (wheatItem) wheatItem.desc = 'Wheat — grind it into flour to bake bread';
 
 // ───────── 化学 / 物理新方块的说明 ─────────
 const BLOCK_DESC: Record<string, string> = {
-  copper_ore: '铜矿石，熔炼出铜锭——电线和电路板都靠它导电',
-  limestone: '石灰岩，主要成分是碳酸钙，高温煅烧变生石灰',
-  rust_block: '铁锈块——铁氧化后的产物，放在铁块旁边会慢慢"传染"',
-  mirror: '平面镜，光的镜面反射：入射角 = 反射角',
-  lens: '凸透镜，把平行的阳光聚到一个焦点上（焦点处能点火）',
-  concrete: '混凝土，砂浆固化后比石头还结实——现代建筑之王',
-  magnet: '磁铁，能吸住铁制品，两端磁性最强（N/S 极）',
-  gas: '二氧化碳气泡，比空气重，会"坐"在地面上，能隔绝氧气灭火',
+  copper_ore: 'Copper ore — smelt it into copper ingots. Wires and circuit boards use it to carry electricity',
+  limestone: 'Limestone is mostly calcium carbonate; heat it in a furnace to make quicklime',
+  rust_block: 'Rusted iron — this is what iron turns into when it rusts. Put it next to an iron block and the rust slowly creeps across',
+  mirror: 'A flat mirror. Light bounces off it: the angle it arrives equals the angle it leaves (angle in = angle out)',
+  lens: 'A convex lens bends parallel sunlight to a single point — so hot it can start a fire',
+  concrete: 'Concrete — once the mix hardens it’s stronger than stone. The king of modern building',
+  magnet: 'A magnet. It grabs iron things, and its two ends (the N and S poles) are the strongest',
+  gas: 'Carbon-dioxide bubbles. They’re heavier than air so they sink and sit on the ground, cutting off oxygen to put out fires',
 };
 for (const [k, d] of Object.entries(BLOCK_DESC)) {
   const it = BY_KEY.get(k);
@@ -140,20 +140,20 @@ for (const [k, d] of Object.entries(BLOCK_DESC)) {
 
 // ───────── 工具与武器（程序化生成 4 档 × 4 种） ─────────
 const MATS = [
-  { key: 'wood', mat: 'plank', name: 'Wooden', cn: '木', speed: 1.6, tier: 0 },
-  { key: 'stone', mat: 'cobble', name: 'Stone', cn: '石', speed: 2.4, tier: 1 },
-  { key: 'iron', mat: 'iron_ingot', name: 'Iron', cn: '铁', speed: 3.6, tier: 2 },
-  { key: 'crystal', mat: 'crystal_shard', name: 'Crystal', cn: '水晶', speed: 5.2, tier: 3 },
+  { key: 'wood', mat: 'plank', name: 'Wooden', cn: 'Wooden', speed: 1.6, tier: 0 },
+  { key: 'stone', mat: 'cobble', name: 'Stone', cn: 'Stone', speed: 2.4, tier: 1 },
+  { key: 'iron', mat: 'iron_ingot', name: 'Iron', cn: 'Iron', speed: 3.6, tier: 2 },
+  { key: 'crystal', mat: 'crystal_shard', name: 'Crystal', cn: 'Crystal', speed: 5.2, tier: 3 },
 ] as const;
 
 export type MatKey = (typeof MATS)[number]['key'];
 
 const TOOLS = [
-  { t: 'pickaxe' as ToolType, en: 'Pickaxe', cn: '镐', icon: '⛏️' },
-  { t: 'axe' as ToolType, en: 'Axe', cn: '斧', icon: '🪓' },
-  { t: 'shovel' as ToolType, en: 'Shovel', cn: '铲', icon: '🥄' },
-  { t: 'sword' as ToolType, en: 'Sword', cn: '剑', icon: '🗡️' },
-  { t: 'hoe' as ToolType, en: 'Hoe', cn: '锄', icon: '🧑‍🌾' },
+  { t: 'pickaxe' as ToolType, en: 'Pickaxe', cn: 'Pickaxe', icon: '⛏️' },
+  { t: 'axe' as ToolType, en: 'Axe', cn: 'Axe', icon: '🪓' },
+  { t: 'shovel' as ToolType, en: 'Shovel', cn: 'Shovel', icon: '🥄' },
+  { t: 'sword' as ToolType, en: 'Sword', cn: 'Sword', icon: '🗡️' },
+  { t: 'hoe' as ToolType, en: 'Hoe', cn: 'Hoe', icon: '🧑‍🌾' },
 ];
 
 export const TOOL_KEYS: string[] = [];
@@ -163,13 +163,13 @@ for (const m of MATS) {
     def({
       key,
       name: `${m.name} ${t.en}`,
-      cn: `${m.cn}${t.cn}`,
+      cn: `${m.cn} ${t.cn}`,
       icon: t.icon,
       kind: t.t === 'sword' ? 'weapon' : 'tool',
       tool: t.t,
       tier: m.tier,
       stack: 1,
-      desc: `${m.cn}${t.cn} · 挖掘速度 ×${m.speed}`,
+      desc: `${m.cn} ${t.cn} · Mining speed ×${m.speed}`,
     });
     TOOL_KEYS.push(key);
   }

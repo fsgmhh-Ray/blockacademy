@@ -1079,8 +1079,8 @@ export const chemVolcano: DemoDef = {
     // CO2 倾泻粒子（浇灭火焰）
     const pour = particles(90, 0xd8d8e8, 0.22);
     root.add(bench, flask, liquid, soda, bottle, cork, candle, wick, flame, bubbles, pour);
-    root.add(label('Baking soda 小苏打', '#ffffff', 24).translateY(2.6).translateX(-3));
-    root.add(label('Vinegar 醋', '#c9a8ff', 24).translateY(0.6).translateX(3));
+    root.add(label('Baking soda', '#ffffff', 24).translateY(2.6).translateX(-3));
+    root.add(label('Vinegar', '#c9a8ff', 24).translateY(0.6).translateX(3));
     return { root, flask, liquid, soda, bottle, bubbles, flame, pour, cork };
   },
   tick: (s, t, step) => {
