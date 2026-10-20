@@ -18,6 +18,10 @@ interface Remote {
   waveUntil: number;
   /** 四肢引用，用于摆动动画 */
   limbs: { armL: THREE.Mesh; armR: THREE.Mesh; legL: THREE.Mesh; legR: THREE.Mesh; body: THREE.Mesh };
+  /** 表情动画：类型 + 结束时间 */
+  emote: string;
+  emoteUntil: number;
+  emoteIcon: THREE.Sprite | null;
 }
 
 function textSprite(
@@ -91,6 +95,19 @@ export class RemotePlayers {
       r = this.build(st);
       this.map.set(st.id, r);
       this.group.add(r.group);
+    } else if (r.state.outfit !== st.outfit) {
+      // 对方换装了：重建化身（保留位置和朝向，别把人瞬移走）
+      const pos = r.pos.clone();
+      const target = r.target.clone();
+      const yaw = r.yaw;
+      this.remove(st.id);
+      r = this.build(st);
+      r.pos.copy(pos);
+      r.target.copy(target);
+      r.yaw = yaw;
+      r.group.rotation.y = yaw;
+      this.map.set(st.id, r);
+      this.group.add(r.group);
     }
     r.state = st;
     r.target.set(st.x, st.y, st.z);
@@ -139,6 +156,24 @@ export class RemotePlayers {
     if (r) r.waveUntil = performance.now() + 1200;
   }
 
+  /** 表情：播放一段动作，并在头顶冒一个 emoji */
+  emote(id: string, anim: string, icon: string, dur: number): void {
+    const r = this.map.get(id);
+    if (!r) return;
+    r.emote = anim;
+    r.emoteUntil = performance.now() + dur * 1000;
+    if (r.emoteIcon) {
+      r.group.remove(r.emoteIcon);
+      (r.emoteIcon.material as THREE.SpriteMaterial).map?.dispose();
+      (r.emoteIcon.material as THREE.SpriteMaterial).dispose();
+    }
+    const sp = textSprite(icon, { bg: 'rgba(0,0,0,0)', fg: '#ffffff', w: 128, h: 128, font: 96 });
+    sp.position.set(0, 2.45, 0);
+    sp.scale.setScalar(0.6);
+    r.emoteIcon = sp;
+    r.group.add(sp);
+  }
+
   count(sceneId: string): number {
     let n = 0;
     for (const r of this.map.values()) if (r.state.scene === sceneId) n++;
@@ -169,6 +204,60 @@ export class RemotePlayers {
       const waving = now < r.waveUntil;
       r.limbs.armR.rotation.x = waving ? -2.4 : s * 0.5;
       r.limbs.body.position.y = 1.02 + Math.abs(Math.sin(r.walkT)) * 0.05 * Math.min(1, d * 6);
+      // 表情动作
+      const emoting = now < r.emoteUntil;
+      if (emoting) {
+        const e = r.emote;
+        const t = (performance.now() % 1000) / 1000;
+        if (e === 'wave') {
+          r.limbs.armR.rotation.x = -2.4 + Math.sin(t * Math.PI * 6) * 0.5;
+          r.limbs.armR.rotation.z = 0.4;
+        } else if (e === 'dance') {
+          r.limbs.armR.rotation.x = -1.6 + Math.sin(t * Math.PI * 6) * 0.8;
+          r.limbs.armL.rotation.x = -1.6 - Math.sin(t * Math.PI * 6) * 0.8;
+          r.limbs.body.rotation.z = Math.sin(t * Math.PI * 4) * 0.18;
+        } else if (e === 'jump') {
+          r.limbs.body.position.y = 1.02 + Math.abs(Math.sin(t * Math.PI * 3)) * 0.45;
+          r.limbs.legL.rotation.x = -0.5;
+          r.limbs.legR.rotation.x = 0.5;
+        } else if (e === 'sit') {
+          r.limbs.legL.rotation.x = -1.4;
+          r.limbs.legR.rotation.x = -1.4;
+          r.limbs.body.position.y = 0.72;
+        } else if (e === 'cheer') {
+          r.limbs.armR.rotation.x = -2.8;
+          r.limbs.armL.rotation.x = -2.8;
+          r.limbs.body.position.y = 1.02 + Math.abs(Math.sin(t * Math.PI * 4)) * 0.2;
+        } else if (e === 'point') {
+          r.limbs.armR.rotation.x = -1.5;
+          r.limbs.armR.rotation.z = -0.2;
+        } else if (e === 'sleep') {
+          r.limbs.armL.rotation.x = -1.2;
+          r.limbs.armR.rotation.x = -1.2;
+          r.limbs.body.rotation.x = 0.3;
+        } else if (e === 'heart') {
+          r.limbs.armR.rotation.x = -1.9;
+          r.limbs.armL.rotation.x = -1.9;
+        } else if (e === 'spin') {
+          r.group.rotation.y = r.yaw + t * Math.PI * 2;
+        }
+      } else {
+        r.limbs.body.rotation.z = 0;
+        r.limbs.body.rotation.x = 0;
+        r.limbs.armL.rotation.x = -s * 0.5;
+        r.limbs.armR.rotation.x = s * 0.5;
+        r.limbs.armL.rotation.z = 0;
+        r.limbs.armR.rotation.z = 0;
+        r.limbs.legL.rotation.x = s * 0.7;
+        r.limbs.legR.rotation.x = -s * 0.7;
+        r.group.rotation.y = r.yaw;
+        if (r.emoteIcon) {
+          r.group.remove(r.emoteIcon);
+          (r.emoteIcon.material as THREE.SpriteMaterial).map?.dispose();
+          (r.emoteIcon.material as THREE.SpriteMaterial).dispose();
+          r.emoteIcon = null;
+        }
+      }
       // 气泡过期
       if (r.bubble && now > r.bubbleUntil) {
         r.group.remove(r.bubble);
@@ -181,9 +270,36 @@ export class RemotePlayers {
 
   private build(st: PlayerState): Remote {
     const g = new THREE.Group();
-    const shirt = new THREE.Color(st.color || '#5ad1c9');
-    const skin = 0xe9b98c;
-    const pants = 0x3c4a63;
+    // 外观：优先用玩家自己选的衣服，没有就退回房间颜色
+    let skinHex = 0xe9b98c;
+    let shirtHex = new THREE.Color(st.color || '#5ad1c9').getHex();
+    let pantsHex = 0x3c4a63;
+    let shoesHex = 0x2b3038;
+    let hatEmoji = '';
+    let hairEmoji = '';
+    if (st.outfit) {
+      try {
+        const o = JSON.parse(st.outfit) as {
+          skin?: string;
+          shirt?: string;
+          pants?: string;
+          shoes?: string;
+          hat?: string;
+          hair?: string;
+        };
+        if (o.skin) skinHex = new THREE.Color(o.skin).getHex();
+        if (o.shirt) shirtHex = new THREE.Color(o.shirt).getHex();
+        if (o.pants) pantsHex = new THREE.Color(o.pants).getHex();
+        if (o.shoes) shoesHex = new THREE.Color(o.shoes).getHex();
+        hatEmoji = o.hat ?? '';
+        hairEmoji = o.hair ?? '';
+      } catch {
+        /* ignore broken outfit payload */
+      }
+    }
+    const shirt = new THREE.Color(shirtHex);
+    const skin = skinHex;
+    const pants = pantsHex;
 
     const body = box(0.56, 0.72, 0.3, shirt.getHex());
     body.position.set(0, 1.02, 0);
@@ -203,6 +319,11 @@ export class RemotePlayers {
     legL.position.set(-0.14, 0.34, 0);
     const legR = legL.clone();
     legR.position.set(0.14, 0.34, 0);
+    // 鞋子
+    const shoeL = box(0.22, 0.12, 0.26, shoesHex);
+    shoeL.position.set(-0.14, 0.05, 0.03);
+    const shoeR = shoeL.clone();
+    shoeR.position.set(0.14, 0.05, 0.03);
     // 四肢绕自身顶端旋转：clone() 共享几何体，先各自复制再平移轴心
     for (const [m, top] of [
       [armL, 1.35],
@@ -214,7 +335,21 @@ export class RemotePlayers {
       m.geometry.translate(0, -0.31, 0);
       m.position.y = top;
     }
-    g.add(body, head, eyeL, eyeR, armL, armR, legL, legR);
+    g.add(body, head, eyeL, eyeR, armL, armR, legL, legR, shoeL, shoeR);
+
+    // 帽子 / 发型：用小贴图精灵挂在头顶
+    if (hatEmoji) {
+      const hatTag = textSprite(hatEmoji, { bg: 'rgba(0,0,0,0)', fg: '#ffffff', w: 128, h: 128, font: 96 });
+      hatTag.position.set(0, 1.98, 0);
+      hatTag.scale.setScalar(0.55);
+      g.add(hatTag);
+    }
+    if (hairEmoji) {
+      const hairTag = textSprite(hairEmoji, { bg: 'rgba(0,0,0,0)', fg: '#ffffff', w: 128, h: 128, font: 96 });
+      hairTag.position.set(0, 1.84, -0.06);
+      hairTag.scale.setScalar(0.42);
+      g.add(hairTag);
+    }
 
     const tag = textSprite(`${st.avatar} ${st.name}`, { bg: 'rgba(10,16,28,0.75)', fg: '#dceaff', w: 256, h: 64, font: 32 });
     tag.position.set(0, 2.12, 0);
@@ -231,6 +366,9 @@ export class RemotePlayers {
       bubbleUntil: 0,
       walkT: 0,
       waveUntil: 0,
+      emote: '',
+      emoteUntil: 0,
+      emoteIcon: null,
       limbs: { armL, armR, legL, legR, body },
     };
     g.position.copy(r.pos);

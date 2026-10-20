@@ -284,6 +284,71 @@ body.touch-mode #chatfeed {
   margin: 0 4px;
 }
 
+/* ───────── 触屏「交谈」按钮（等同电脑端 E 键） ───────── */
+#talk-btn {
+  position: absolute;
+  left: 50%;
+  /* 触屏模式下快捷栏在 bottom:152px、爱心在 212px，按钮放在它们上方居中，不与摇杆/按键重叠 */
+  bottom: 234px;
+  transform: translateX(-50%) scale(0.9);
+  display: none;
+  align-items: center;
+  gap: 8px;
+  min-height: 52px;
+  max-width: min(300px, 62vw);
+  padding: 10px 22px;
+  font-size: 17px;
+  font-weight: 800;
+  font-family: inherit;
+  line-height: 1.15;
+  text-align: center;
+  color: #04121d;
+  background: linear-gradient(180deg, #7ef0c8, #35c89c);
+  border: 2px solid rgba(255, 255, 255, 0.65);
+  border-radius: 999px;
+  box-shadow: 0 6px 22px rgba(0, 0, 0, 0.45), 0 0 0 4px rgba(53, 200, 156, 0.22);
+  pointer-events: auto;
+  opacity: 0;
+  transition: opacity 0.15s ease, transform 0.15s ease;
+  z-index: 30; /* 压在触控层(5)之上 */
+  cursor: pointer;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+
+#talk-btn.show {
+  display: inline-flex;
+  opacity: 1;
+  transform: translateX(-50%) scale(1);
+  animation: talkpop 0.18s ease;
+}
+
+#talk-btn:active {
+  transform: translateX(-50%) scale(0.94);
+}
+
+@keyframes talkpop {
+  from {
+    transform: translateX(-50%) scale(0.7);
+  }
+}
+
+/* 非触屏（JAVA 版）永远不显示 */
+body:not(.touch-mode) #talk-btn {
+  display: none !important;
+}
+
+/* 帮助文案按输入方式二选一 */
+.k-touch {
+  display: none;
+}
+body.touch-mode .k-java {
+  display: none;
+}
+body.touch-mode .k-touch {
+  display: inline;
+}
+
 /* ───────── 热键栏 ───────── */
 #hotbar {
   position: absolute;
@@ -1731,14 +1796,24 @@ body.is-touch #rotate-hint #rh-go {
   font-size: 18px;
 }
 
-/* 触屏模式：把界面元素挪开，避免和摇杆/按钮重叠 */
+/* 触屏模式：快捷栏放到真正的屏幕底部（《我的世界》BEDROCK 版就是这样），
+   摇杆和按键上移到快捷栏上方，避免互相盖住 */
 body.touch-mode #hotbar {
-  bottom: 152px;
-  transform: translateX(-50%) scale(0.92);
+  bottom: 6px;
+  transform: translateX(-50%) scale(0.88);
+  transform-origin: bottom center;
 }
 
 body.touch-mode #hud-hearts {
-  bottom: 212px;
+  bottom: 78px;
+}
+
+body.touch-mode #touch-stick {
+  bottom: 78px;
+}
+
+body.touch-mode #touch-btns {
+  bottom: 78px;
 }
 
 body.touch-mode #btn-fart {
@@ -1794,19 +1869,26 @@ body.touch-mode .sheet {
     width: 104px;
     height: 104px;
     left: 14px;
-    bottom: 14px;
+    bottom: 72px;
   }
 
   #touch-btns {
     grid-template-columns: repeat(2, 52px);
     right: 10px;
-    bottom: 12px;
+    bottom: 72px;
   }
 
   .tbtn {
     width: 52px;
     height: 52px;
     font-size: 20px;
+  }
+
+  body.touch-mode #talk-btn {
+    bottom: 196px;
+    min-height: 44px;
+    font-size: 15px;
+    padding: 8px 16px;
   }
 }
 
@@ -1817,9 +1899,10 @@ body.touch-mode #hotbar {
 
 /* 手机模式：对话面板拉通、限高，软键盘弹起来输入行也不会被挡住 */
 body.touch-mode #dialog {
+  position: fixed; /* 相对视觉视口，iOS 顶起页面时也不会被带走 */
   right: 8px;
   left: 8px;
-  top: 8px;
+  top: max(8px, env(safe-area-inset-top));
   width: auto;
   max-height: 52vh;
 }
@@ -1828,4 +1911,338 @@ body.touch-mode #ask-input {
 }
 body.touch-mode #ask-row {
   flex-wrap: wrap;
+}
+/* 触屏：对话面板的 ✕ / 发送 / 🎁 达到 44px 最小可点区域 */
+body.touch-mode #btn-close-dialog,
+body.touch-mode #ask-send,
+body.touch-mode #btn-gift {
+  min-width: 44px;
+  min-height: 44px;
+  font-size: 16px;
+}
+body.touch-mode #btn-close-dialog {
+  min-width: 52px;
+  font-size: 20px;
+}
+
+/* ═══════════════ 新增功能面板（家长/商店/配方书/换装/答题/表情/麦克风） ═══════════════ */
+
+/* 右上角快捷操作栏：麦克风 + 表情 */
+#action-rail {
+  position: absolute;
+  right: 12px;
+  top: 12px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 8px;
+  pointer-events: none;
+  z-index: 12;
+}
+
+.rail-btn,
+.emote-btn {
+  pointer-events: auto;
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  font-size: 20px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  background: rgba(14, 20, 32, 0.62);
+  border: 2px solid rgba(255, 255, 255, 0.24);
+  color: #fff;
+  cursor: pointer;
+  user-select: none;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+  transition: all 0.14s ease;
+}
+
+.rail-btn:hover,
+.emote-btn:hover {
+  border-color: var(--accent);
+  transform: translateY(-2px);
+}
+
+.rail-btn.on {
+  background: linear-gradient(180deg, #ff8f8f, #e04a4a);
+  border-color: #fff;
+  animation: micpulse 1s infinite;
+}
+
+@keyframes micpulse {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgba(255, 90, 90, 0.6);
+  }
+  50% {
+    box-shadow: 0 0 0 9px rgba(255, 90, 90, 0);
+  }
+}
+
+#emote-bar {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  pointer-events: none;
+}
+
+.emote-btn {
+  width: 36px;
+  height: 36px;
+  font-size: 17px;
+}
+
+/* 家长控制 */
+.parent-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+  gap: 10px;
+}
+
+.switch {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: rgba(24, 32, 48, 0.6);
+  cursor: pointer;
+}
+
+.switch input {
+  width: 20px;
+  height: 20px;
+  margin-top: 2px;
+  flex: none;
+  accent-color: var(--accent);
+}
+
+.switch b {
+  display: block;
+  font-size: 14px;
+}
+
+.switch small {
+  display: block;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.5;
+  margin-top: 2px;
+}
+
+/* 商店 */
+.card.owned {
+  border-color: var(--accent2);
+  opacity: 0.85;
+}
+
+.shop-buy {
+  margin-top: 10px;
+  width: 100%;
+  min-height: 38px;
+  font-weight: 700;
+}
+
+.shop-buy:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* 配方书 */
+.book-card.can {
+  border-color: var(--accent);
+}
+
+.need-list {
+  list-style: none;
+  padding: 0;
+  margin: 8px 0 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.need-list li {
+  font-size: 14px;
+  padding: 7px 10px;
+  border-radius: 8px;
+  background: rgba(20, 28, 44, 0.7);
+  border-left: 3px solid var(--muted);
+}
+
+.need-list li.ok {
+  border-left-color: #35c89c;
+}
+
+.need-list li.miss {
+  border-left-color: #e0a33a;
+}
+
+.need-list small {
+  display: block;
+  color: var(--muted);
+  font-size: 12px;
+  margin-top: 3px;
+  line-height: 1.5;
+}
+
+/* 换装 */
+.w-card.cur {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px rgba(53, 200, 156, 0.35);
+}
+
+.w-card .ic {
+  width: 42px;
+  height: 42px;
+  border-radius: 10px;
+  display: grid;
+  place-items: center;
+  font-size: 22px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+/* 答题 */
+.q-text {
+  font-size: 19px;
+  font-weight: 700;
+  line-height: 1.5;
+  margin: 10px 0 14px;
+}
+
+#quiz-choices {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.quiz-choice {
+  text-align: left;
+  min-height: 46px;
+  font-size: 15px;
+  padding: 11px 14px;
+}
+
+.quiz-choice.right {
+  border-color: #35c89c;
+  background: rgba(53, 200, 156, 0.22);
+}
+
+.quiz-choice.wrong {
+  border-color: #e04a4a;
+  background: rgba(224, 74, 74, 0.2);
+}
+
+#quiz-feedback {
+  min-height: 20px;
+  line-height: 1.5;
+}
+
+/* 触屏：新面板里的按钮要够大 */
+body.touch-mode .shop-buy,
+body.touch-mode .quiz-choice {
+  min-height: 48px;
+  font-size: 16px;
+}
+body.touch-mode .card {
+  padding: 16px;
+}
+body.touch-mode .tbtn-tab {
+  min-height: 44px;
+}
+
+/* 本机表情特效：屏幕中间冒一个大 emoji */
+#emote-fx {
+  position: absolute;
+  left: 50%;
+  top: 42%;
+  transform: translate(-50%, -50%) scale(0.4);
+  font-size: 64px;
+  pointer-events: none;
+  opacity: 0;
+  z-index: 28;
+  filter: drop-shadow(0 4px 12px rgba(0, 0, 0, 0.5));
+}
+
+#emote-fx.play {
+  animation: emotepop 1.5s ease-out forwards;
+}
+
+@keyframes emotepop {
+  0% {
+    opacity: 0;
+    transform: translate(-50%, -30%) scale(0.4);
+  }
+  18% {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1.15);
+  }
+  30% {
+    transform: translate(-50%, -50%) scale(1);
+  }
+  80% {
+    opacity: 1;
+    transform: translate(-50%, -60%) scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: translate(-50%, -80%) scale(0.9);
+  }
+}
+
+/* ───────── 箱子面板 ───────── */
+.chest-wrap {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  margin-top: 12px;
+}
+
+.chest-wrap .inv-label {
+  align-self: flex-start;
+  font-size: 13px;
+  opacity: 0.8;
+  margin-bottom: 6px;
+}
+
+.chest-wrap #chest-grid {
+  padding: 10px;
+  border-radius: 12px;
+  background: rgba(120, 82, 40, 0.22);
+  border: 2px solid rgba(190, 140, 80, 0.45);
+}
+
+.chest-wrap #chest-bag {
+  padding: 8px;
+  border-radius: 12px;
+  background: rgba(20, 28, 44, 0.5);
+}
+
+@media (max-width: 820px) {
+  .chest-wrap .inv-grid {
+    grid-template-columns: repeat(var(--cols, 3), 40px);
+  }
+  .chest-wrap .inv-slot {
+    width: 40px;
+    height: 40px;
+  }
+}
+
+/* ───────── 档案密码锁 ───────── */
+.plock {
+  font-size: 12px;
+  opacity: 0.85;
+}
+
+.pw-lock input {
+  flex: 1;
+  min-width: 140px;
+}
+
+.pw-lock #profile-lock-err:empty {
+  display: none;
 }

@@ -448,6 +448,18 @@ const TILES: Record<string, Painter> = {
       return null;
     }),
   ),
+  // 宝箱：木箱体 + 上下盖沿 + 中缝铁扣 + 金锁
+  chest: combine(
+    base(0x9a6a34, 0.12),
+    overlay((x, y, rnd) => {
+      if (y < 2 || y > 13) return packHex(0x6a4420);
+      if (y === 7 || y === 8) return packHex(0x4a4a52);
+      if (x === 1 || x === 14) return packHex(0x7a5228);
+      if (y === 5 && x >= 6 && x <= 9) return packHex(0xe8c84a);
+      if (rnd() < 0.12) return packHex(0x8a5c2c);
+      return null;
+    }),
+  ),
 };
 
 /** 石灰岩层理用的确定性伪随机（同一 tile 内自洽） */
@@ -461,6 +473,13 @@ const index = new Map<string, number>();
 let builtTexture: THREE.Texture | null = null;
 let builtCanvas: HTMLCanvasElement | null = null;
 
+// 槽位表在模块加载时就建好：tileUV / tileIdOf 不依赖 canvas，
+// 这样在图集还没生成（Node 冒烟、首帧）时也能取到正确格位。
+for (let i = 0; i < Object.keys(TILES).length; i++) {
+  if (i >= GRID * GRID) break; // 超出网格的贴图不进槽位表
+  index.set(Object.keys(TILES)[i], i);
+}
+
 /** 取原始 canvas（UI 里画方块小图标用） */
 /** 图集里实际用到的槽位数量（上限 8×8=64） */
 export const ATLAS_TILES = Object.keys(TILES).length;
@@ -468,6 +487,9 @@ export const ATLAS_TILES = Object.keys(TILES).length;
 export function hasTile(key: string): boolean {
   return Object.prototype.hasOwnProperty.call(TILES, key);
 }
+
+/** 全部贴图 key（顺序即图集槽位顺序，Node 里也能查） */
+export const TILE_KEYS: string[] = Object.keys(TILES);
 
 export function atlasCanvas(): HTMLCanvasElement | null {
   buildAtlas();

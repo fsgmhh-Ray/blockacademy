@@ -156,6 +156,22 @@ const TOOLS = [
   { t: 'hoe' as ToolType, en: 'Hoe', cn: 'Hoe', icon: '🧑‍🌾' },
 ];
 
+/**
+ * 玩具发射器（Toy Blaster）
+ *
+ * 安全向的设计：它只能打「夜里的暗影怪」，打动物和小朋友完全没有伤害，
+ * 而且要答对一道题才解锁 —— 让它同时成为一道安全知识题。
+ */
+def({
+  key: 'toy_blaster',
+  name: 'Toy Blaster',
+  cn: 'Toy Blaster',
+  icon: '🔫',
+  kind: 'weapon',
+  stack: 1,
+  desc: 'A foam-dart toy blaster. It only works on night Shadows — never on animals or people',
+});
+
 export const TOOL_KEYS: string[] = [];
 for (const m of MATS) {
   for (const t of TOOLS) {

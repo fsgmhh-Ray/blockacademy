@@ -42,6 +42,8 @@ export interface SceneContext {
   nearby: string[];
   /** a short description of the player's current quest */
   quest?: string;
+  /** the player's school grade (1-6): NPCs stick to knowledge they can pick out */
+  grade?: number;
 }
 
 export interface SpeakResult {
@@ -252,7 +254,7 @@ ${this.rumorLine()}
         }
         return { text: '', engine: 'llm', error: 'model returned empty' };
       }
-      const node = searchKnowledge(userText, 1)[0]?.node;
+      const node = searchKnowledge(userText, 1, ctx.grade)[0]?.node;
       return { text: cleanup(full), engine: 'llm', nodeId: node?.id };
     } catch (e) {
       clearTimeout(timer);
@@ -307,7 +309,7 @@ ${this.rumorLine()}
     }
 
     // 4) knowledge retrieval
-    const hits = searchKnowledge(q, 3);
+    const hits = searchKnowledge(q, 3, ctx.grade);
     if (hits.length && hits[0].score > 2.2) {
       const best = hits[0].node;
       this.lastNodeId = best.id;

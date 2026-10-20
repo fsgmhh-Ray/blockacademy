@@ -244,7 +244,7 @@ export class NetClient {
   /** 广播自己的位置/朝向（内部节流：移动 120ms、心跳 2s） */
   publishState(
     force: boolean,
-    st?: { scene: string; x: number; y: number; z: number; yaw: number },
+    st?: { scene: string; x: number; y: number; z: number; yaw: number; outfit?: string },
   ): void {
     const c = this.client;
     if (!c || !c.connected || !this.me || !st) return;
@@ -262,6 +262,7 @@ export class NetClient {
       yaw: Math.round(st.yaw * 100) / 100,
       t: now,
     };
+    if (st.outfit !== undefined) next.outfit = st.outfit;
     if (!force && !stateChanged(this.lastSent, next)) return;
     this.lastSent = next;
     this.lastSentAt = now;
@@ -296,10 +297,10 @@ export class NetClient {
     c.publish(`${topicRoot(this.cfg.room)}/edit`, encode(m), { qos: 0 });
   }
 
-  event(kind: EventKind, scene: string, x: number, y: number, z: number): void {
+  event(kind: EventKind, scene: string, x: number, y: number, z: number, data?: string): void {
     const c = this.client;
     if (!c || !c.connected || !this.me) return;
-    const m: EventMsg = { kind, id: this.connId, name: this.me.name, scene, x, y, z };
+    const m: EventMsg = { kind, id: this.connId, name: this.me.name, scene, x, y, z, data };
     c.publish(`${topicRoot(this.cfg.room)}/evt`, encode(m), { qos: 0 });
   }
 

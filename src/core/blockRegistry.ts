@@ -131,6 +131,7 @@ export const Blocks = {
   concrete: def({ key: 'concrete', name: 'Concrete', tiles: 'concrete', color: 0xa8a8a0 }),
   magnet: def({ key: 'magnet', name: 'Magnet', tiles: 'magnet', color: 0xb8bcc4 }),
   gas: def({ key: 'gas', name: 'Carbon Dioxide Bubble', tiles: 'gas', solid: false, transparent: true, liquid: false, color: 0xf2fbff }),
+  chest: def({ key: 'chest', name: 'Chest', tiles: 'chest', color: 0x9a6a34 }),
 };
 
 export const BLOCK_LIST = defs;

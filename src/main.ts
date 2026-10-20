@@ -11,6 +11,7 @@ import { blockDef, BLOCK_LIST } from './core/blockRegistry';
 import { blocks, BLOCK_NAMES } from './world/blockIds';
 import { MobManager, type Mob, type MobKind } from './mob/mobs';
 import { Inventory, type Slot } from './craft/inventory';
+import { ChestStore, CHEST_SLOTS } from './world/chests';
 import { item, breakDrop, keyOfBlock, hasItem, blockItems, type ItemDef } from './craft/items';
 import type { InvTarget, PauseAction } from './ui/ui';
 import type { Tab } from './craft/inventory';
@@ -31,8 +32,21 @@ import {
   selectProfile,
   deleteProfile as deleteUserProfile,
   saveActive,
+  addCoins,
+  grantPass,
+  hasPass,
+  isUnlocked,
+  unlockItem,
+  setGrade as setProfileGrade,
+  setOutfit as setProfileOutfit,
+  setParentSettings,
+  setPassword,
+  bumpExpansion,
+  profileIsLocked,
+  checkProfilePassword,
   type ProfileMeta,
   type ChatEntry,
+  type ParentSettings,
 } from './user/profile';
 import {
   bump,
@@ -45,6 +59,36 @@ import {
   type Progress,
   type Quest,
 } from './edu/quests';
+
+/**
+ * Web Speech API 的最小类型声明。
+ * 浏览器（Chrome / Edge / Safari）自带，TypeScript 的 lib 里没有，所以自己写一份。
+ */
+interface SpeechRecognitionAlternativeLike {
+  transcript: string;
+}
+interface SpeechRecognitionResultLike {
+  0: SpeechRecognitionAlternativeLike;
+}
+interface SpeechRecognitionEventLike {
+  results: { [index: number]: SpeechRecognitionResultLike; length: number };
+}
+interface SpeechRecognitionErrorLike {
+  error?: string;
+}
+interface SpeechRecognitionLike {
+  lang: string;
+  continuous: boolean;
+  interimResults: boolean;
+  maxAlternatives: number;
+  onresult: ((e: SpeechRecognitionEventLike) => void) | null;
+  onerror: ((e: SpeechRecognitionErrorLike) => void) | null;
+  onend: (() => void) | null;
+  start(): void;
+  stop(): void;
+  abort(): void;
+}
+
 import { NetClient, type Identity } from './net/net';
 import { RemotePlayers } from './net/avatars';
 import {
@@ -57,6 +101,16 @@ import {
   type NetStatus,
   type PlayerState,
 } from './net/protocol';
+import { PASSES, passById, COINS_PER_TASK, COINS_PER_LESSON, type Pass } from './edu/shop';
+import { emoteById } from './edu/emotes';
+import { quizById } from './edu/quizzes';
+import { unlockFor } from './edu/unlocks';
+import { clampGrade, GRADE_BANDS } from './edu/grades';
+import { normalizeOutfit, type Outfit } from './user/wardrobe';
+import { hashPin, verifyPin, validPin } from './user/parent';
+import { scrub, blockedReason } from './net/wordfilter';
+import { expandWorld, EXPANSION_BANNER } from './world/expansion';
+import { buildRecipeBook } from './craft/recipeBook';
 
 class Game {
   renderer: THREE.WebGLRenderer;
@@ -151,6 +205,12 @@ class Game {
   /** 无敌（Grayson 爽模式）：掉血/岩浆/窒息全部免疫 */
   private godMode = false;
   private landmarks = new Landmarks();
+  /** 通行证效果：护盾 / 加速 / 夜视 */
+  private shieldOn = false;
+  private speedBoost = false;
+  private nightVision = false;
+  /** 换装后需要重新广播一次外观 */
+  private outfitChanged = false;
 
   constructor(canvas: HTMLCanvasElement, uiRoot: HTMLElement) {
     const boot = getActiveState();
@@ -173,7 +233,11 @@ class Game {
       onSettingSave: (cfg) => this.saveSettings(cfg),
       onTestLLM: (cfg) => this.testLLM(cfg),
       onSpeech: (v) => this.onSpeech(v),
-      onProfiles: () => ({ list: listProfiles(), activeId: activeProfileId() ?? '' }),
+      onProfiles: () => ({
+        list: listProfiles(),
+        activeId: activeProfileId() ?? '',
+        locked: Object.fromEntries(listProfiles().map((m) => [m.id, profileIsLocked(m.id)])),
+      }),
       onCreateProfile: (name, avatar, color) => this.createProfile(name, avatar, color),
       onSwitchProfile: (id) => this.switchProfile(id),
       onDeleteProfile: (id) => this.deleteProfile(id),
@@ -200,6 +264,22 @@ class Game {
         players: this.net.getPlayers(),
         invite: this.net.inviteUrl(),
       }),
+      onParentChange: (patch) => this.applyParentSettings(patch),
+      onParentUnlocked: () => this.ui.toast('🔓 Parent settings unlocked', 'good', 1800),
+      onBuyPass: (id) => this.buyPass(id),
+      onQuizUnlock: (itemKey, correct) => this.onQuizAnswer(itemKey, correct),
+      onOutfit: (o) => this.setOutfit(o),
+      onGrade: (g) => this.setGrade(g),
+      onCook: (out) => this.cookFromBook(out),
+      onEmote: (id) => this.playEmote(id),
+      onVoice: (text) => this.onVoiceText(text),
+      onMicToggle: () => this.toggleMic(),
+      onUnlockProfile: (id, hash) => this.onProfileUnlocked(id, hash),
+      onSetPassword: (hash) => {
+        setPassword(hash);
+        this.ui.toast('🔒 Account password saved', 'good', 2200);
+      },
+      onChestClose: () => this.closeChest(),
     });
 
     this.touch = new TouchControls(uiRoot, this.input, (a) => this.onTouchAction(a));
@@ -248,6 +328,7 @@ class Game {
     const st = boot.state;
     this.edition = st.edition ?? (this.isTouch ? 'bedrock' : 'java');
     if (st.inventory) this.inv.load(st.inventory);
+    this.chests = new ChestStore(st.chests);
     this.chatLog = st.chatLog ?? [];
     this.friendship = st.friendship ?? {};
     this.achievements = st.achievements ?? {};
@@ -305,8 +386,8 @@ class Game {
   // ───────── 生命周期 ─────────
   boot(): void {
     this.buildScene(this.sceneDef, true);
-    this.ui.renderMap(SCENES, this.sceneDef.id, this.progress, this.doneScenes);
-    this.ui.renderQuests(this.sceneDef.id, this.progress);
+    this.ui.renderMap(SCENES, this.sceneDef.id, this.progress, this.doneScenes, this.playerGrade());
+    this.ui.renderQuests(this.sceneDef.id, this.progress, this.playerGrade());
     this.ui.setScene(this.sceneDef, this.doneScenes.size);
     this.ui.setTitlePlayer(this.userMeta);
     this.ui.setPlayer(this.userMeta);
@@ -468,7 +549,7 @@ class Game {
       })
       .filter(Boolean) as NPCActor[];
     for (const n of this.npcs) {
-      const q = questsOf(scene.id).find((x) => x.kind === 'talk' && x.target === n.personality.id);
+      const q = questsOf(scene.id, this.playerGrade()).find((x) => x.kind === 'talk' && x.target === n.personality.id);
       n.setBadge(true, q && isDone(q, this.progress) ? '✓' : '?');
     }
 
@@ -484,7 +565,7 @@ class Game {
 
     this.populateMobs();
     this.ui.setScene(scene, this.doneScenes.size);
-    this.ui.renderQuests(scene.id, this.progress);
+    this.ui.renderQuests(scene.id, this.progress, this.playerGrade());
     if (!silent) this.ui.toast(`${scene.icon} ${scene.name} · ${scene.subtitle}`, 'info', 4200);
     // 新手最常见的卡点：在村里转半天找不到出口。传送台现在都有光柱信标，这里再口头点一句。
     if (scene.id === 'village') {
@@ -586,7 +667,7 @@ class Game {
     // 让提示先渲染出来，再做同步的地形生成
     setTimeout(() => {
       this.buildScene(s);
-      this.ui.renderMap(SCENES, id, this.progress, this.doneScenes);
+      this.ui.renderMap(SCENES, id, this.progress, this.doneScenes, this.playerGrade());
       saveProgress(this.progress);
       // 换场景后立刻广播一次，让房间里的人知道我去哪了
       this.publishNetState(true);
@@ -608,10 +689,16 @@ class Game {
     this.mode = 'play';
     this.input.requestLock();
     if (!id) return;
-    const q = questsOf(this.sceneDef.id).find((x) => x.kind === 'demo' && x.target === id);
+    const q = questsOf(this.sceneDef.id, this.playerGrade()).find((x) => x.kind === 'demo' && x.target === id);
     if (q) this.completeQuest(q, 'Demo watched');
     if (id === 'intro') {
-      this.ui.toast('Walk up to any resident and press E to chat with them', 'good', 6000);
+      this.ui.toast(
+        this.edition === 'bedrock'
+          ? 'Walk up to any resident and tap 💬 (or the green TALK button) to chat with them'
+          : 'Walk up to any resident and press E to chat with them',
+        'good',
+        6000,
+      );
     }
   }
 
@@ -659,7 +746,7 @@ class Game {
   }
 
   private bumpQuest(predicate: (q: Quest) => boolean, note = ''): void {
-    for (const q of questsOf(this.sceneDef.id)) {
+    for (const q of questsOf(this.sceneDef.id, this.playerGrade())) {
       if (!predicate(q)) continue;
       if (isDone(q, this.progress)) continue;
       bump(this.progress, q, 1);
@@ -672,9 +759,9 @@ class Game {
         }
       }
     }
-    this.ui.renderQuests(this.sceneDef.id, this.progress);
+    this.ui.renderQuests(this.sceneDef.id, this.progress, this.playerGrade());
     for (const n of this.npcs) {
-      const q = questsOf(this.sceneDef.id).find((x) => x.kind === 'talk' && x.target === n.personality.id);
+      const q = questsOf(this.sceneDef.id, this.playerGrade()).find((x) => x.kind === 'talk' && x.target === n.personality.id);
       n.setBadge(true, q && isDone(q, this.progress) ? '✓' : '?');
     }
     saveProgress(this.progress);
@@ -689,8 +776,27 @@ class Game {
       const r = REWARDS[this.sceneDef.id];
       this.ui.toast(`${r.icon} Earned the "${r.name}" badge! This stop is fully explored`, 'good', 6000);
     }
-    this.ui.renderQuests(this.sceneDef.id, this.progress);
+    this.ui.renderQuests(this.sceneDef.id, this.progress, this.playerGrade());
     saveProgress(this.progress);
+    // 完成任务 = 得金币 + 世界扩张
+    this.rewardForTask(q);
+  }
+
+  /**
+   * 任务奖励：金币 + 世界扩张。
+   * 世界每次扩张都会在场景里多搭出一样东西，让「学习让世界变大」看得见。
+   */
+  private rewardForTask(q: Quest): void {
+    const coins = addCoins(COINS_PER_TASK);
+    this.ui.toast(`🪙 +${COINS_PER_TASK} coins (you have ${coins})`, 'good', 2600);
+
+    const level = bumpExpansion();
+    const scene = SCENE_BY_ID.get(this.sceneDef.id);
+    const cx = scene?.spawn?.[0] ?? 0;
+    const cz = scene?.spawn?.[1] ?? 0;
+    const built = expandWorld(this.world, level, this.sceneDef.id, cx, cz);
+    this.ui.toast(`🌍 ${EXPANSION_BANNER}`, 'info', 4200);
+    if (built) this.ui.toast(`${built.icon} ${built.name} — ${built.desc}`, 'good', 4200);
   }
 
   // ───────── 对话 ─────────
@@ -700,6 +806,7 @@ class Game {
       sceneName: `${this.sceneDef.name} (${this.sceneDef.subtitle})`,
       topics: this.sceneDef.topics,
       nearby: this.pads.slice(0, 3).map((p) => p.label.replace(/^\S+\s*/, '')),
+      grade: this.playerGrade(),
     };
   }
 
@@ -722,6 +829,358 @@ class Game {
     stopSpeaking();
     this.mode = 'play';
     this.input.requestLock();
+  }
+
+  // ══════════════ 新增系统：家长控制 / 金币商店 / 答题解锁 / 换装 / 年级 / 表情 / 麦克风 ══════════════
+
+  /** 家长设置里的敏感词过滤是否开启（运行时缓存） */
+  private wordFilterOn = true;
+  /** 家长设置的每日聊天上限（分钟，0 = 不限） */
+  private chatLimit = 0;
+  /** 今天已经用掉的聊天分钟数 */
+  private chatUsedToday = 0;
+  /** 表情：当前播放中的动画 */
+  private emoteId = '';
+  private emoteUntil = 0;
+  /** 语音识别实例 */
+  private recog: SpeechRecognitionLike | null = null;
+  private micActive = false;
+  /** 麦克风识别到的文字，用来判断是发给 NPC 还是发给房间 */
+  private voiceTarget: 'npc' | 'room' = 'room';
+
+  /** 当前玩家的年级（决定任务/知识难度） */
+  private playerGrade(): number {
+    return getActiveState().state.grade;
+  }
+
+  // ───────── 面板入口 ─────────
+  openParentPanel(): void {
+    const st = getActiveState().state;
+    const list = questsOf(this.sceneDef.id, this.playerGrade());
+    const done = list.filter((q) => isDone(q, this.progress)).length;
+    this.ui.openParent(st.parent, { coins: st.coins, done, total: list.length });
+  }
+
+  openShopPanel(): void {
+    const st = getActiveState().state;
+    this.ui.openShop(st.coins, st.passes);
+  }
+
+  openBookPanel(): void {
+    const counts: Record<string, number> = {};
+    for (const s of this.inv.slots) if (s) counts[s.key] = (counts[s.key] ?? 0) + s.count;
+    if (this.inv.offhand) counts[this.inv.offhand.key] = (counts[this.inv.offhand.key] ?? 0) + this.inv.offhand.count;
+    this.ui.openBook(counts);
+  }
+
+  openWardrobePanel(): void {
+    this.ui.openWardrobe(getActiveState().state.outfit);
+  }
+
+  // ───────── 家长设置 ─────────
+  private applyParentSettings(patch: Partial<ParentSettings>): void {
+    setParentSettings(patch);
+    const st = getActiveState().state;
+    this.wordFilterOn = st.parent.wordFilter;
+    this.chatLimit = st.parent.chatMinutes;
+    if (patch.multiplayer !== undefined) {
+      this.netCfg.enabled = st.parent.multiplayer;
+      if (this.netCfg.enabled) this.net.connect();
+      else this.net.disconnect();
+    }
+    if (patch.ai !== undefined && this.llm.enabled && !st.parent.ai) {
+      this.llm.enabled = false;
+      saveLLMConfig(this.llm);
+    }
+    if (patch.chatMinutes !== undefined) this.chatLimit = st.parent.chatMinutes;
+    // 跨天自动清零聊天时长
+    const today = new Date().toISOString().slice(0, 10);
+    if (st.chatDay !== today) saveActive({ chatUsed: 0, chatDay: today });
+    this.chatUsedToday = st.chatDay === today ? st.chatUsed : 0;
+    this.ui.toast('👪 Parent settings saved', 'good', 2000);
+  }
+
+  // ───────── 金币与通行证 ─────────
+  /** 飞行要用通行证：创造模式免费，普通模式要买 Flight Pass。返回是否成功切换 */
+  private toggleFlight(): boolean {
+    if (this.gameMode === 'creative' || this.gameMode === 'spectator') {
+      this.player.fly = !this.player.fly;
+      return true;
+    }
+    if (!hasPass('pass_fly')) {
+      this.ui.toast('🔒 Flight is a Pass — buy the Flight Pass to unlock it', 'warn', 3200);
+      this.openShopPanel();
+      return false;
+    }
+    this.player.fly = !this.player.fly;
+    return true;
+  }
+
+  private buyPass(id: string): void {
+    const p = passById(id);
+    if (!p) return;
+    let st = getActiveState().state;
+    if (st.passes.includes(id)) {
+      this.ui.toast('You already own that pass', 'info', 2000);
+      return;
+    }
+    // 需要先答题才能买
+    if (p.quiz && !st.unlocked.includes('quiz:' + p.quiz)) {
+      const q = quizById(p.quiz);
+      if (q) {
+        this.ui.openQuiz(q, {
+          title: `🪙 Unlock ${p.name}`,
+          why: 'Answer right to unlock this pass.',
+          onAnswer: (correct) => {
+            if (!correct) {
+              this.ui.toast('❌ Not right this time — you can try again later', 'warn', 2600);
+              return;
+            }
+            unlockItem('quiz:' + p.quiz);
+            this.buyPass(id);
+          },
+        });
+        return;
+      }
+    }
+    st = getActiveState().state;
+    if (st.coins < p.cost) {
+      this.ui.toast(`🪙 You need ${p.cost - st.coins} more coins for ${p.name}`, 'warn', 3000);
+      return;
+    }
+    addCoins(-p.cost);
+    grantPass(id);
+    this.ui.toast(`${p.icon} ${p.name} unlocked!`, 'good', 3000);
+    this.applyPassEffect(p);
+    this.ui.openShop(getActiveState().state.coins, getActiveState().state.passes);
+  }
+
+  private applyPassEffect(p: Pass): void {
+    if (p.effect === 'fly' && !this.player.fly) {
+      this.player.fly = true;
+      this.ui.toast('🪶 Flight is ON', 'good', 2200);
+    }
+    if (p.effect === 'shield') this.shieldOn = true;
+    if (p.effect === 'speed') this.speedBoost = true;
+    if (p.effect === 'night_vision') this.nightVision = true;
+  }
+
+  // ───────── 答题解锁物品 ─────────
+  private promptUnlockQuiz(itemKey: string): void {
+    const u = unlockFor(itemKey);
+    if (!u) return;
+    const q = quizById(u.quiz);
+    if (!q) {
+      unlockItem(itemKey);
+      return;
+    }
+    this.ui.openQuiz(q, {
+      title: `🔒 ${item(itemKey).name} is locked`,
+      why: u.reason,
+      onAnswer: (correct) => {
+        if (correct) {
+          unlockItem(itemKey);
+          this.ui.toast(`✅ ${item(itemKey).name} unlocked!`, 'good', 2800);
+        } else {
+          this.ui.toast('❌ Not right — try again when you have learned it', 'warn', 2800);
+        }
+      },
+    });
+  }
+
+  private onQuizAnswer(itemKey: string, correct: boolean): void {
+    if (correct) {
+      unlockItem(itemKey);
+      this.ui.toast(`✅ ${item(itemKey).name} unlocked!`, 'good', 2600);
+    } else {
+      this.ui.toast('❌ Not quite right — have another go', 'warn', 2400);
+    }
+  }
+
+  // ───────── 换装 ─────────
+  private setOutfit(o: Outfit): void {
+    const norm = normalizeOutfit(o);
+    setProfileOutfit(norm);
+    this.vm.setSleeve(norm.shirt);
+    this.outfitChanged = true; // 让下一次状态广播带上新外观
+    this.ui.toast('👕 Look updated!', 'good', 1600);
+  }
+
+  // ───────── 年级 ─────────
+  private setGrade(g: number): void {
+    const grade = clampGrade(g);
+    setProfileGrade(grade);
+    const band = GRADE_BANDS.find((x) => x.grade === grade);
+    this.ui.toast(`🎓 Now learning at ${band?.label ?? 'Grade ' + grade}`, 'good', 2600);
+  }
+
+  // ───────── 配方书：直接合成 ─────────
+  private cookFromBook(out: string): void {
+    const counts: Record<string, number> = {};
+    for (const s of this.inv.slots) if (s) counts[s.key] = (counts[s.key] ?? 0) + s.count;
+    const entries = buildRecipeBook().filter((e) => e.out === out);
+    if (!entries.length) {
+      this.ui.toast('There is no recipe for that yet', 'warn', 2200);
+      return;
+    }
+    // 需要工作台/熔炉的配方要先站在旁边
+    const usable = entries.filter((e) => {
+      if (e.station === 'Crafting Table') return this.nearBlock(blocks.craftingTable);
+      if (e.station === 'Furnace') return this.nearBlock(blocks.furnace);
+      return true;
+    });
+    if (!usable.length) {
+      this.ui.toast(
+        entries[0].station === 'Furnace'
+          ? '🔥 Stand next to a furnace to make that'
+          : '🪚 Place a crafting table nearby first!',
+        'warn',
+        3000,
+      );
+      return;
+    }
+    // 锁定的物品要先答题
+    if (unlockFor(out) && !isUnlocked(out)) {
+      this.promptUnlockQuiz(out);
+      return;
+    }
+    const ready = usable.find((e) => e.need.every((n) => (counts[n.item] ?? 0) >= n.want));
+    if (!ready) {
+      const missing = usable[0].need
+        .filter((n) => (counts[n.item] ?? 0) < n.want)
+        .map((n) => `${n.name} ×${n.want - (counts[n.item] ?? 0)}`)
+        .join(', ');
+      this.ui.toast(`Still missing: ${missing}`, 'warn', 3400);
+      return;
+    }
+    for (const n of ready.need) this.inv.remove(n.item, n.want);
+    this.inv.add(out, ready.count);
+    sfx.play('craft');
+    this.ui.toast(`⚒️ Crafted ${ready.count} × ${ready.name}!`, 'good', 2600);
+    this.saveAll();
+    this.ui.renderInventory(this.inv, this.gameMode === 'creative');
+    this.openBookPanel();
+  }
+
+  // ───────── 表情 ─────────
+  private playEmote(id: string): void {
+    const e = emoteById(id);
+    if (!e) return;
+    this.emoteId = e.anim;
+    this.emoteUntil = performance.now() + e.dur * 1000;
+    this.ui.showEmote(e.icon, e.dur * 1000);
+    this.net.event('emote', this.sceneDef.id, this.player.position.x, this.player.position.y, this.player.position.z, e.anim);
+  }
+
+  // ───────── 麦克风 ─────────
+  private toggleMic(): void {
+    if (this.micActive) {
+      this.stopMic();
+      return;
+    }
+    const Ctor =
+      (window as unknown as { SpeechRecognition?: new () => SpeechRecognitionLike }).SpeechRecognition ??
+      (window as unknown as { webkitSpeechRecognition?: new () => SpeechRecognitionLike }).webkitSpeechRecognition;
+    if (!Ctor) {
+      this.ui.toast('🎤 This browser has no speech recognition — try Chrome or Edge', 'warn', 4000);
+      return;
+    }
+    try {
+      const rec = new Ctor();
+      rec.lang = 'en-US';
+      rec.interimResults = false;
+      rec.maxAlternatives = 1;
+      rec.continuous = false;
+      rec.onresult = (ev: SpeechRecognitionEventLike) => {
+        const text = String(ev.results?.[0]?.[0]?.transcript ?? '').trim();
+        if (text) this.onVoiceText(text);
+      };
+      rec.onerror = (ev: SpeechRecognitionErrorLike) => {
+        this.stopMic();
+        const code = ev?.error ?? 'error';
+        this.ui.toast(
+          code === 'not-allowed'
+            ? '🎤 Microphone permission was blocked — allow it in the browser settings'
+            : '🎤 I could not hear anything. Try again.',
+          'warn',
+          3600,
+        );
+      };
+      rec.onend = () => this.stopMic();
+      this.recog = rec;
+      rec.start();
+      this.micActive = true;
+      this.ui.setMicState(true, 'Listening… tap again to stop');
+      this.ui.toast('🎤 Listening — say something!', 'info', 2200);
+    } catch {
+      this.ui.toast('🎤 The microphone could not be started', 'warn', 3000);
+    }
+  }
+
+  private stopMic(): void {
+    if (this.recog) {
+      try {
+        this.recog.stop();
+      } catch {
+        /* ignore */
+      }
+      this.recog = null;
+    }
+    if (this.micActive) {
+      this.micActive = false;
+      this.ui.setMicState(false, 'Tap to speak');
+    }
+  }
+
+  /** 麦克风识别到的文字：和在聊 NPC 时发给 NPC，否则发给房间 */
+  private onVoiceText(text: string): void {
+    this.stopMic();
+    if (this.mode === 'dialog' && this.activeNpc) {
+      this.ui.setAskText(text);
+      this.ask(text);
+      return;
+    }
+    this.sendChat(text);
+  }
+
+  // ───────── 聊天（带家长限制 + 敏感词过滤） ─────────
+  private sendChat(text: string): void {
+    const st = getActiveState().state;
+    if (!st.parent.freeChat) {
+      this.ui.toast('👪 A grown-up has turned off chat for now', 'warn', 3000);
+      return;
+    }
+    if (st.parent.chatMinutes > 0) {
+      const today = new Date().toISOString().slice(0, 10);
+      const used = st.chatDay === today ? st.chatUsed : 0;
+      if (used >= st.parent.chatMinutes) {
+        this.ui.toast('👪 Chat time is over for today — ask a grown-up for more', 'warn', 4000);
+        return;
+      }
+      saveActive({ chatUsed: used + 1, chatDay: today });
+    }
+    // 敏感词：整条消息变成 ###
+    let out = text;
+    if (this.wordFilterOn) {
+      const reason = blockedReason(text);
+      if (reason) {
+        out = '###';
+        this.ui.toast('👪 That message was blocked by the parent word filter', 'warn', 3200);
+      }
+    }
+    this.ui.consolePrint('You (said): ' + out, 'me');
+    this.ui.toast('📣 ' + out, 'info', 4000);
+    this.net.chat(out);
+    this.logChat('You', this.userMeta.avatar, out, true);
+  }
+
+  // ───────── 切换档案的密码校验 ─────────
+  private onProfileUnlocked(id: string, hash: string): boolean {
+    if (checkProfilePassword(id, hash)) {
+      this.switchProfile(id);
+      return true;
+    }
+    return false;
   }
 
   private async runTalk(npc: NPCActor, text: string, isGreet = false): Promise<void> {
@@ -793,11 +1252,11 @@ class Game {
     // 联机身份跟随当前玩家（改名/换头像/换颜色即时生效）
     this.net.setIdentity(this.identity());
     this.ui.setScene(this.sceneDef, this.doneScenes.size);
-    this.ui.renderQuests(this.sceneDef.id, this.progress);
-    this.ui.renderMap(SCENES, this.sceneDef.id, this.progress, this.doneScenes);
+    this.ui.renderQuests(this.sceneDef.id, this.progress, this.playerGrade());
+    this.ui.renderMap(SCENES, this.sceneDef.id, this.progress, this.doneScenes, this.playerGrade());
     // refresh NPC talk-badges for the newly active progress
     for (const n of this.npcs) {
-      const q = questsOf(this.sceneDef.id).find((x) => x.kind === 'talk' && x.target === n.personality.id);
+      const q = questsOf(this.sceneDef.id, this.playerGrade()).find((x) => x.kind === 'talk' && x.target === n.personality.id);
       n.setBadge(true, q && isDone(q, this.progress) ? '✓' : '?');
     }
     void id;
@@ -977,6 +1436,10 @@ class Game {
     } else if (m.kind === 'wave') {
       this.remote.wave(m.id);
       this.ui.toast(`👋 ${m.name} waved at you`, 'info', 2600);
+    } else if (m.kind === 'emote') {
+      const e = emoteById(m.data ?? '');
+      this.remote.emote(m.id, m.data ?? 'wave', e?.icon ?? '🙂', e?.dur ?? 1.5);
+      this.ui.toast(`${e?.icon ?? '🙂'} ${m.name} is doing ${e?.name ?? 'something'}`, 'info', 2600);
     }
   }
 
@@ -984,7 +1447,17 @@ class Game {
   private publishNetState(force = false): void {
     if (!this.netCfg.enabled) return;
     const p = this.player.position;
-    this.net.publishState(force, { scene: this.sceneDef.id, x: p.x, y: p.y, z: p.z, yaw: this.player.yaw });
+    // 换装后要把新外观一起广播出去
+    const outfit = this.outfitChanged ? JSON.stringify(getActiveState().state.outfit) : undefined;
+    if (this.outfitChanged) this.outfitChanged = false;
+    this.net.publishState(force || !!outfit, {
+      scene: this.sceneDef.id,
+      x: p.x,
+      y: p.y,
+      z: p.z,
+      yaw: this.player.yaw,
+      outfit,
+    });
   }
 
   /** 设置页保存联机配置（换 broker/房间会自动重连） */
@@ -1034,11 +1507,8 @@ class Game {
     const line = raw.trim();
     if (!line) return;
     if (!line.startsWith('/')) {
-      // 不带 / 的输入 = 聊天：本地记录 + 广播给同房间的玩家
-      this.ui.consolePrint('You (said): ' + line, 'me');
-      this.ui.toast('📣 ' + line, 'info', 4000);
-      this.net.chat(line);
-      this.logChat('You', this.userMeta.avatar, line, true);
+      // 不带 / 的输入 = 聊天：走家长控制（时长限制 + 敏感词过滤）后广播
+      this.sendChat(line);
       return;
     }
     const parts = line.slice(1).split(/\s+/).filter(Boolean);
@@ -1274,7 +1744,7 @@ class Game {
         return out(t, 'sys');
       }
       case 'fly':
-        this.player.fly = !this.player.fly;
+        if (!this.toggleFlight()) return out('🔒 Flight is a Pass. Buy the Flight Pass in the Pass Shop (Pause → Pass Shop).', 'err');
         return out(`Flight mode ${this.player.fly ? 'ON' : 'OFF'}`, 'ok');
       case 'locate':
         return out(`Position: X ${p.x.toFixed(1)}  Y ${p.y.toFixed(1)}  Z ${p.z.toFixed(1)}`, 'ok');
@@ -1615,8 +2085,25 @@ class Game {
   private placeCd = 0;
   private hitResult: VoxelHit | null = null;
 
-  private doMine(dt: number): void {
-    const hit = this.updateHighlight();
+  /** 打败一只动物后的掉落与提示（小孩向的说法，不说「杀」） */
+  private onAnimalDefeated(m: Mob): void {
+    const drop = MobManager.dropOf(m.kind);
+    this.unlock('hunt', `🥩 You worked out how to ${m.def.name.toLowerCase()}s — and where their food comes from.`);
+    if (drop) {
+      const n = this.inv.add(drop, 1);
+      if (n <= 0) {
+        this.ui.toast(`${m.def.icon} ${m.def.name} defeated — your bag was full, so the ${item(drop).name} was lost`, 'warn', 3600);
+      } else {
+        this.ui.toast(`${m.def.icon} ${m.def.name} defeated — you got 1 × ${item(drop).name}`, 'good', 3200);
+      }
+      this.refreshHud();
+      this.saveAll();
+    } else {
+      this.ui.toast(`${m.def.icon} ${m.def.name} defeated. ${m.def.name}s are friends — maybe feed it instead next time.`, 'info', 3200);
+    }
+  }
+
+  private doMine(dt: number): void {    const hit = this.updateHighlight();
     const click = this.input.takeClick(0);
     const held = this.input.mouseHeld(0);
 
@@ -1634,6 +2121,20 @@ class Game {
         this.burst(foe.position.x, foe.position.y + 0.9, foe.position.z, 0x7a5cff, 10, 1.8);
         this.unlock('fight', '⚔️ You stood up to a Shadow!');
         if (!held) return;
+      } else {
+        // 也可以对普通动物下手（但不能打自己的宠物）
+        const animal = this.mobs.nearest(p, this.player.forwardVector(), 3.0);
+        if (animal && !animal.pet && this.swingCd <= 0) {
+          this.swingCd = 0.4;
+          const it = this.heldItem();
+          const dmg = it?.tool === 'sword' ? 4 + (it.tier ?? 0) * 2 : 2;
+          this.vm.swingRight();
+          this.mobs.strike(p, this.player.forwardVector(), dmg, 3.0, (m) => m === animal);
+          sfx.play('pop');
+          this.burst(animal.position.x, animal.position.y + 0.9, animal.position.z, 0xffd27a, 10, 1.8);
+          if (animal.isDead) this.onAnimalDefeated(animal);
+          if (!held) return;
+        }
       }
     }
     this.swingCd -= dt;
@@ -1664,6 +2165,55 @@ class Game {
     }
   }
 
+  /**
+   * 玩具发射器：只打夜里的暗影怪。
+   * 瞄着动物、小朋友或别的玩家时它会拒绝开火 —— 这是安全设定，不是限制。
+   */
+  private fireBlaster(): void {
+    if (this.placeCd > 0) return;
+    this.placeCd = 0.45;
+    this.vm.swingRight();
+    sfx.play('click');
+    const p = this.player.position;
+    const fwd = this.player.forwardVector();
+    // 面前最近的任何生物
+    const target = this.mobs.nearest(p, fwd, 8.0);
+    if (target) {
+      if (target.def.hostile) {
+        this.mobs.strike(p, fwd, 3, 8.0, (m) => m === target);
+        this.burst(target.position.x, target.position.y + 0.9, target.position.z, 0x9fe8ff, 12, 2.0);
+        this.ui.toast('💥 Foam dart hit the Shadow!', 'good', 1800);
+        return;
+      }
+      this.ui.toast('🛡️ The toy blaster is foam-only — it will not hurt animals', 'warn', 2800);
+      return;
+    }
+    // 面前有别的玩家？也不能打
+    if (this.nearRemotePlayer()) {
+      this.ui.toast('🛡️ Never aim that at another player', 'warn', 2800);
+      return;
+    }
+    this.burst(p.x + fwd.x * 4, p.y + 1.2, p.z + fwd.z * 4, 0x9fe8ff, 6, 1.4);
+    this.ui.toast('💨 Pfff! Foam dart flies off into the distance', 'info', 1800);
+  }
+
+  /** 面前 8 格内有没有别的玩家 */
+  private nearRemotePlayer(): boolean {
+    const p = this.player.position;
+    const fwd = this.player.forwardVector();
+    const list = this.net.getPlayers();
+    for (const s of list) {
+      if (s.id === this.net.myId) continue;
+      const dx = s.x - p.x;
+      const dz = s.z - p.z;
+      const d = Math.hypot(dx, dz);
+      if (d > 8 || d < 0.001) continue;
+      const dot = (dx / d) * fwd.x + (dz / d) * fwd.z;
+      if (dot > 0.6) return true;
+    }
+    return false;
+  }
+
   private doPlace(dt: number): void {
     const hit = this.hitResult;
     this.placeCd -= dt;
@@ -1671,9 +2221,19 @@ class Game {
     const click = this.input.takeClick(2);
     const held = this.input.mouseHeld(2);
     if (!click && !held) return;
+    // 右键对着箱子 = 开箱子（优先于放置）
+    const chest = this.chestUnderAim();
+    if (chest) {
+      this.openChest(chest.x, chest.y, chest.z);
+      return;
+    }
     const slot = this.heldSlot();
     if (!slot) return;
     const it = item(slot.key);
+    if (it.key === 'toy_blaster') {
+      this.fireBlaster();
+      return;
+    }
     if (it.block === undefined) {
       if (click) this.ui.toast(`${it.icon} ${it.name} can't be placed — put it in your ${'bag'} first`, 'warn', 2200);
       return;
@@ -1840,7 +2400,10 @@ class Game {
   private onTouchAction(a: string): void {
     switch (a) {
       case 'fly':
-        this.player.fly = !this.player.fly;
+        if (!this.toggleFlight()) {
+          this.ui.toast('🔒 Flight is a Pass — buy it in the Pass Shop (Pause → Pass Shop)', 'warn', 3400);
+          break;
+        }
         this.ui.toast(this.player.fly ? '🪶 Flight on' : '🪶 Flight off', 'info', 2200);
         break;
       case 'fart':
@@ -1850,19 +2413,17 @@ class Game {
         this.toggleInventory();
         break;
       case 'chat':
-        // 💬 = 互动：命令台开着就关掉；有 NPC 就聊天，有传送台就传送，否则打开命令台
+        // 💬 = 触屏版的 E 键：命令台开着就关掉；有 NPC/传送台就走完整互动逻辑，
+        // 否则打开命令台（不带 / 的发言会广播给在线玩家）
         if (this.consoleOpen) {
           this.closeConsole();
           break;
         }
-        if (this.nearestNpc()) this.openDialog(this.nearestNpc()!);
-        else if (this.nearPad) {
-          const p = this.nearPad;
-          if (p.demo) this.playDemo(p.demo);
-          else if (p.goto) this.gotoScene(p.goto);
+        if (this.nearestNpc() || this.nearPad) {
+          this.doInteract();
         } else {
           this.openConsole();
-          this.ui.toast('No NPC nearby — opened the command console instead (/help)', 'info', 2600);
+          this.ui.toast('No resident nearby — opened the command console instead (/help)', 'info', 2600);
         }
         break;
       case 'cmd':
@@ -1900,6 +2461,92 @@ class Game {
     this.refreshHud();
     this.saveAll();
     if (this.edition === 'java') this.input.requestLock();
+  }
+
+  // ───────── 箱子 ─────────
+  private chests!: ChestStore;
+  /** 当前打开的箱子坐标；null 表示没开箱子 */
+  private openChestAt: { x: number; y: number; z: number } | null = null;
+
+  /** 打开脚下的箱子（坐标已由调用方确认） */
+  private openChest(x: number, y: number, z: number): void {
+    if (this.mode !== 'play') return;
+    this.openChestAt = { x, y, z };
+    this.chestBuffer = this.chests.get(this.sceneDef.id, x, y, z);
+    this.inv.cursor = null;
+    sfx.play('open');
+    this.ui.openChest(this.chestBuffer, this.inv);
+    this.input.exitLock();
+    this.bumpQuest((q) => q.kind === 'explore');
+  }
+
+  private closeChest(): void {
+    const c = this.openChestAt;
+    if (c) this.chests.set(this.sceneDef.id, c.x, c.y, c.z, this.chestBuffer);
+    this.openChestAt = null;
+    // 光标上还拿着东西：放回背包，别让它凭空消失
+    if (this.inv.cursor) {
+      const left = this.inv.add(this.inv.cursor.key, this.inv.cursor.count);
+      if (left > 0) this.ui.toast(`🎒 No room for ${item(this.inv.cursor.key).name} — ${left} left behind`, 'warn', 3000);
+      this.inv.cursor = null;
+    }
+    this.ui.closeOverlay('chest');
+    this.refreshHud();
+    this.saveAll();
+    if (this.edition === 'java') this.input.requestLock();
+  }
+
+  /** 箱子面板里点格子：光标式存取，和背包完全一致 */
+  private chestBuffer: (Slot | null)[] = Array.from({ length: CHEST_SLOTS }, () => null);
+  private onChestClick(index: number): void {
+    const c = this.openChestAt;
+    if (!c) return;
+    const inv = this.inv;
+    const cur = inv.cursor;
+    const slot = this.chestBuffer[index];
+    if (!cur) {
+      if (slot) {
+        this.chestBuffer[index] = null;
+        inv.cursor = slot;
+      }
+    } else if (!slot) {
+      this.chestBuffer[index] = cur;
+      inv.cursor = null;
+    } else if (slot.key === cur.key) {
+      const max = item(cur.key).stack;
+      const put = Math.min(max - slot.count, cur.count);
+      if (put > 0) {
+        slot.count += put;
+        cur.count -= put;
+        if (cur.count <= 0) inv.cursor = null;
+      } else {
+        this.chestBuffer[index] = cur;
+        inv.cursor = slot;
+      }
+    } else {
+      this.chestBuffer[index] = cur;
+      inv.cursor = slot;
+    }
+    sfx.play('click');
+    this.ui.openChest(this.chestBuffer, inv);
+  }
+
+  /** 关掉箱子时把改动写回存档（ChestStore 持有同一份引用） */
+  private flushChest(): void {
+    const c = this.openChestAt;
+    if (!c) return;
+    this.chests.set(this.sceneDef.id, c.x, c.y, c.z, this.chestBuffer);
+  }
+
+  /** 准星对着箱子时，E / 右键 / 触屏 💬 都能打开 */
+  private chestUnderAim(): { x: number; y: number; z: number } | null {
+    const hit = this.hitResult;
+    if (!hit) return null;
+    if (this.world.get(hit.x, hit.y, hit.z) !== blocks.chest) return null;
+    const p = this.player.position;
+    // 别隔着墙开箱子
+    if (Math.hypot(hit.x + 0.5 - p.x, hit.y + 0.5 - p.y, hit.z + 0.5 - p.z) > 5.2) return null;
+    return { x: hit.x, y: hit.y, z: hit.z };
   }
 
   /** 附近有没有这种方块（工作台 / 熔炉的判定） */
@@ -1955,6 +2602,12 @@ class Game {
     const inv = this.inv;
     const creative = this.gameMode === 'creative';
 
+    // 箱子面板：走箱子自己的存取逻辑
+    if (target === 'chest') {
+      this.onChestClick(index);
+      return;
+    }
+
     if (target === 'out' || target === 'fout') {
       this.takeCraftResult();
       return;
@@ -1967,6 +2620,24 @@ class Game {
       return;
     }
 
+    // ✂ Split 模式：把这一叠拆成两半（8 个木板 → 4 + 4）
+    if (this.ui.splitArmed && (target === 'storage' || target === 'hotbar')) {
+      const s = this.slotGet(target, index);
+      if (s && s.count > 1) {
+        const half = Math.floor(s.count / 2);
+        s.count -= half;
+        // 拆出来的那半放到光标上（可以再放到别的格子）
+        inv.cursor = { key: s.key, count: half };
+        sfx.play('click');
+        this.ui.renderInventory(inv, creative);
+        this.refreshHud();
+        this.saveAll();
+        return;
+      }
+      this.ui.toast('That stack cannot be split (needs 2 or more)', 'info', 1800);
+      return;
+    }
+
     const cur = inv.cursor;
     const slot = this.slotGet(target, index);
     if (!cur) {
@@ -1975,14 +2646,24 @@ class Game {
         inv.cursor = slot;
       }
     } else if (!slot) {
-      this.slotSet(target, index, { key: cur.key, count: cur.count });
-      inv.cursor = null;
+      // 合成格每次只放 1 个（《我的世界》就是这样）：
+      // 否则一叠 8 个木板会整叠卡在一个格子里，2×2 的工作台配方永远凑不齐。
+      const n = target === 'craft' ? 1 : cur.count;
+      this.slotSet(target, index, { key: cur.key, count: n });
+      cur.count -= n;
+      if (cur.count <= 0) inv.cursor = null;
     } else if (slot.key === cur.key) {
       const max = item(cur.key).stack;
-      const put = Math.min(max - slot.count, cur.count);
-      slot.count += put;
-      cur.count -= put;
-      if (cur.count <= 0) inv.cursor = null;
+      const put = target === 'craft' ? 1 : Math.min(max - slot.count, cur.count);
+      const real = Math.min(put, max - slot.count);
+      if (real > 0) {
+        slot.count += real;
+        cur.count -= real;
+        if (cur.count <= 0) inv.cursor = null;
+      } else {
+        this.slotSet(target, index, cur);
+        inv.cursor = slot;
+      }
     } else {
       this.slotSet(target, index, cur);
       inv.cursor = slot;
@@ -1999,6 +2680,12 @@ class Game {
     if (!r) return;
     if (inv.tab === 'craft' && !this.nearBlock(blocks.craftingTable)) return;
     if (inv.tab === 'furnace' && !this.nearBlock(blocks.furnace)) return;
+
+    // 锁定的物品：先答对题才能做出来
+    if (unlockFor(r.key) && !isUnlocked(r.key)) {
+      this.promptUnlockQuiz(r.key);
+      return;
+    }
 
     if (inv.tab === 'furnace') {
       if (inv.furnaceIn) {
@@ -2062,6 +2749,22 @@ class Game {
       case 'inventory':
         this.ui.closeOverlay('pause');
         this.openInventory();
+        break;
+      case 'book':
+        this.ui.closeOverlay('pause');
+        this.openBookPanel();
+        break;
+      case 'shop':
+        this.ui.closeOverlay('pause');
+        this.openShopPanel();
+        break;
+      case 'wardrobe':
+        this.ui.closeOverlay('pause');
+        this.openWardrobePanel();
+        break;
+      case 'parent':
+        this.ui.closeOverlay('pause');
+        this.openParentPanel();
         break;
       case 'chatlog':
         this.ui.renderChatLog(
@@ -2136,6 +2839,7 @@ class Game {
 
   // ───────── 记录与成就 ─────────
   private saveAll(): void {
+    this.flushChest();
     saveActive({
       edition: this.edition,
       inventory: this.inv.serialize(),
@@ -2145,6 +2849,7 @@ class Game {
       sound: this.soundOn,
       volume: this.soundVolume,
       net: this.netCfg,
+      chests: this.chests.serialize(),
     });
   }
 
@@ -2402,12 +3107,13 @@ class Game {
       if (i.pressed(`Digit${k + 1}`)) this.setHotbar(k);
     }
     if (i.pressed('KeyM')) {
-      this.ui.renderMap(SCENES, this.sceneDef.id, this.progress, this.doneScenes);
+      this.ui.renderMap(SCENES, this.sceneDef.id, this.progress, this.doneScenes, this.playerGrade());
       this.ui.toggleOverlay('map');
       i.exitLock();
     }
     if (i.pressed('KeyO')) {
       this.ui.fillSettings(this.llm);
+      this.ui.renderGradeRow(getActiveState().state.grade);
       this.ui.toggleOverlay('settings');
       i.exitLock();
     }
@@ -2417,23 +3123,39 @@ class Game {
     }
     if (i.pressed('KeyH')) this.ui.toggleOverlay('help');
     if (i.pressed('Escape') && this.mode === 'dialog') this.closeDialog();
-    // 《我的世界》键位：E 打开物品栏（面前有 NPC / 演示台时优先互动）
-    if (i.pressed('KeyE')) {
-      if (this.nearPad) {
-        const p = this.nearPad;
-        if (p.demo) this.playDemo(p.demo);
-        else if (p.goto) this.gotoScene(p.goto);
-      } else if (this.nearestNpc()) {
-        this.openDialog(this.nearestNpc()!);
-      } else if (!this.interactMob()) {
-        this.toggleInventory();
-      }
+    if (i.pressed('Escape') && this.ui.isOverlayOpen('chest')) {
+      this.closeChest();
+      i.exitLock();
     }
+    // 《我的世界》键位：E 打开物品栏（面前有 NPC / 演示台时优先互动）
+    if (i.pressed('KeyE')) this.doInteract();
     if (i.pressed('KeyI')) this.toggleInventory();
     if (i.pressed('KeyG')) this.fart();
     if (i.pressed('KeyV')) this.wave();
     if (i.pressed('KeyC')) this.swingLeft();
     if (i.pressed('F3') && this.edition === 'java') this.f3On = !this.f3On;
+  }
+
+  /**
+   * 「互动」动作：电脑端按 E，触屏端点 💬 按钮 / TALK 大按钮，走同一条逻辑。
+   * 面前有传送台就用传送台，有 NPC 就开对话框，有动物就互动，否则打开背包。
+   */
+  private doInteract(): void {
+    // 箱子优先：面前有箱子就开箱子
+    const chest = this.chestUnderAim();
+    if (chest) {
+      this.openChest(chest.x, chest.y, chest.z);
+      return;
+    }
+    if (this.nearPad) {
+      const p = this.nearPad;
+      if (p.demo) this.playDemo(p.demo);
+      else if (p.goto) this.gotoScene(p.goto);
+    } else if (this.nearestNpc()) {
+      this.openDialog(this.nearestNpc()!);
+    } else if (!this.interactMob()) {
+      this.toggleInventory();
+    }
   }
 
   private nearestNpc(): NPCActor | null {
@@ -2453,16 +3175,25 @@ class Game {
   }
 
   private updateHint(): void {
-    if (this.consoleOpen) {
+    // 触屏专属的「交谈」大按钮：默认先收起，只有真正靠近 NPC / 演示台时才弹出
+    const touch = this.edition === 'bedrock';
+    const clearAll = () => {
       this.ui.hint(null);
+      this.ui.setTalkBtn(null);
+    };
+    if (this.consoleOpen || this.ui.anyOverlayOpen()) {
+      clearAll();
       return;
     }
     if (this.mode !== 'play') {
-      this.ui.hint(null);
+      clearAll();
       return;
     }
     if (!this.input.locked) {
-      this.ui.hint('Click the screen to resume (<kbd>ESC</kbd> to release mouse)');
+      this.ui.setTalkBtn(null);
+      this.ui.hint(
+        touch ? 'Tap the screen to keep playing' : 'Click the screen to resume (<kbd>ESC</kbd> to release mouse)',
+      );
       return;
     }
     // 演示台优先
@@ -2476,17 +3207,27 @@ class Game {
       }
     }
     if (this.nearPad) {
-      this.ui.hint(`<kbd>E</kbd> ${this.nearPad.label}`);
+      if (touch) {
+        this.ui.hint(null);
+        this.ui.setTalkBtn(`💬 ${this.nearPad.label}`, () => this.doInteract());
+      } else {
+        this.ui.setTalkBtn(null);
+        this.ui.hint(`<kbd>E</kbd> ${this.nearPad.label}`);
+      }
       return;
     }
     const npc = this.nearestNpc();
     if (npc) {
-      const q = questsOf(this.sceneDef.id).find((x) => x.kind === 'talk' && x.target === npc.personality.id);
-      const doneTag = q && isDone(q, this.progress) ? ' (already chatted)' : '';
-      this.ui.hint(`<kbd>E</kbd> Talk with ${npc.personality.emoji} ${npc.personality.name} ${doneTag}`);
-      // 首次靠近自动打个招呼（由对话面板承担）
-      if (npc.shouldGreet() && Math.random() < 0.02) {
-        // 低频触发：让 NPC 自己先开口一小句
+      const q = questsOf(this.sceneDef.id, this.playerGrade()).find((x) => x.kind === 'talk' && x.target === npc.personality.id);
+      const doneTag = q && isDone(q, this.progress) ? ' ✓' : '';
+      if (touch) {
+        this.ui.hint(null);
+        this.ui.setTalkBtn(`💬 Talk to ${npc.personality.name}${doneTag}`, () => this.openDialog(npc));
+      } else {
+        this.ui.setTalkBtn(null);
+        this.ui.hint(
+          `<kbd>E</kbd> Talk with ${npc.personality.emoji} ${npc.personality.name} ${doneTag ? '(already chatted)' : ''}`,
+        );
       }
       this.npcCooldown = 0;
       return;
@@ -2495,7 +3236,20 @@ class Game {
     if (this.sceneDef.id === 'village' && Math.hypot(78.5 - p.x, 90.5 - p.z) < 8) {
       this.unlock('grayson_house', "💙 Visited Grayson's House — hi, co-author!");
     }
+    // 瞄着箱子：提示怎么打开
+    const chest = this.chestUnderAim();
+    if (chest) {
+      if (touch) {
+        this.ui.hint(null);
+        this.ui.setTalkBtn('🧰 Open chest', () => this.openChest(chest.x, chest.y, chest.z));
+      } else {
+        this.ui.setTalkBtn(null);
+        this.ui.hint('<kbd>E</kbd> or right-click to open the chest');
+      }
+      return;
+    }
     this.ui.hint(null);
+    this.ui.setTalkBtn(null);
     if (this.npcCooldown++ > 60) this.npcCooldown = 0;
   }
 

@@ -161,6 +161,11 @@ export function house(
     }
   box(w, ox, g, oz, ox + wdt, g + hgt, oz + dep, matId, true);
   box(w, ox, g, oz, ox + wdt, g, oz + dep, blocks.cobble);
+  // 室内清空：场景里先种的树/草可能把枝叶伸进屋里，
+  // 不清掉的话家具摆不进去、玩家还会被卡在树叶里。
+  for (let x = ox + 1; x <= ox + wdt - 1; x++)
+    for (let z = oz + 1; z <= oz + dep - 1; z++)
+      for (let y = g + 1; y <= g + hgt - 1; y++) w.putFast(x, y, z, 0);
   // 屋顶
   for (let y = 0; y <= 2; y++) {
     const inset = y;
@@ -178,6 +183,64 @@ export function house(
   // 室内灯
   w.putFast(ox + 1, g + hgt, oz + 1, blocks.lamp);
   w.putFast(ox + wdt - 1, g + hgt, oz + dep - 1, blocks.lamp);
+
+  furnishHouse(w, ox, oz, wdt, dep, hgt, g);
+}
+
+/**
+ * 房屋内部家具：箱子、工作台、熔炉、书架、床。
+ * house() 收尾自动调用，所以场景里每座 house() 都会顺带布置好。
+ * 布局按室内可用空间自适应，小屋放不下全套就只放优先项。
+ */
+export function furnishHouse(
+  w: World,
+  ox: number,
+  oz: number,
+  wdt: number,
+  dep: number,
+  hgt: number,
+  g: number,
+): void {
+  // 室内地板以上第一层，y = g+1。hgt<=2 的窝棚放不下家具。
+  const fy = g + 1;
+  if (hgt < 3) return;
+  /** 只在不与门窗/家具冲突的空气格里放东西 */
+  const free = (x: number, z: number): boolean => {
+    if (x <= ox || x >= ox + wdt || z <= oz || z >= oz + dep) return false;
+    return w.get(x, fy, z) === 0 && w.get(x, fy + 1, z) === 0;
+  };
+  /** 在墙上挂书架（需要上下都有墙可以附着，简化成直接放地板上） */
+  const put = (x: number, z: number, id: number, stack = 1): void => {
+    if (!free(x, z)) return;
+    for (let i = 0; i < stack; i++) w.putFast(x, fy + i, z, id);
+  };
+
+  // 1) 角落工作区：工作台 + 熔炉（挨着方便合成与烧炼）
+  put(ox + 1, oz + dep - 1, blocks.craftingTable);
+  put(ox + 2, oz + dep - 1, blocks.furnace);
+
+  // 2) 收纳：箱子沿后墙排（存货 + 战利品），房间越宽放越多
+  const maxChests = Math.max(1, Math.min(3, wdt - 4));
+  for (let i = 0; i < maxChests; i++) put(ox + wdt - 1 - i, oz + dep - 1, blocks.chest);
+
+  // 3) 书架墙
+  const shelf = Math.min(3, Math.max(0, dep - 4));
+  for (let i = 0; i < shelf; i++) {
+    put(ox + 1, oz + 1 + i, blocks.bookshelf, 2);
+  }
+
+  // 4) 床（白色羊毛）+ 床头火把
+  const bx = ox + wdt - 2;
+  const bz = oz + 1;
+  if (free(bx, bz)) {
+    w.putFast(bx, fy, bz, blocks.woolWhite);
+    w.putFast(bx, fy, bz + 1, blocks.woolWhite);
+    w.putFast(bx, fy + 1, bz, blocks.woolWhite); // 枕头
+    if (free(bx, bz + 2)) w.putFast(bx, fy + 1, bz + 2, blocks.torch);
+  }
+
+  // 5) 窗边一盆花：屋子看着有人住
+  put(ox + wdt - 1, oz + 1, blocks.flowerPink);
 }
 
 /** 圆形/方形平台 */

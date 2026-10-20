@@ -28,6 +28,10 @@ export interface PlayerState {
   yaw: number;
   /** 发送时间戳（ms） */
   t: number;
+  /** 角色外观（压缩 JSON 字符串，换装后才发） */
+  outfit?: string;
+  /** 最近一次表情 id（广播用） */
+  emote?: string;
 }
 
 export interface ChatMsg {
@@ -51,7 +55,7 @@ export interface EditMsg {
   by: string;
 }
 
-export type EventKind = 'fart' | 'wave';
+export type EventKind = 'fart' | 'wave' | 'emote';
 
 export interface EventMsg {
   kind: EventKind;
@@ -61,6 +65,8 @@ export interface EventMsg {
   x: number;
   y: number;
   z: number;
+  /** 表情 id（kind === 'emote' 时有值） */
+  data?: string;
 }
 
 export type NetStatus = 'off' | 'connecting' | 'online' | 'error';
@@ -111,6 +117,7 @@ export function decode<T>(raw: string): T | null {
 export function stateChanged(a: PlayerState | null, b: PlayerState): boolean {
   if (!a) return true;
   if (Math.abs(a.x - b.x) > 0.04 || Math.abs(a.y - b.y) > 0.04 || Math.abs(a.z - b.z) > 0.04) return true;
+  if (a.outfit !== b.outfit) return true;
   return Math.abs(a.yaw - b.yaw) > 0.035;
 }
 

@@ -436,9 +436,11 @@ function statTower(w: World, cx: number, cz: number): void {
   box(w, cx - 3, g, cz - 3, cx + 3, g + 5, cz + 3, blocks.stoneBrick, true);
   box(w, cx - 3, g, cz - 3, cx + 3, g, cz + 3, blocks.quartz);
   for (let y = g + 1; y <= g + 2; y++) w.putFast(cx, y, cz + 3, 0);
-  // 塔内书架 + 塔顶灯
+  // 塔内书架 + 塔顶灯（书架旁就是放统计资料的箱子）
   w.putFast(cx - 2, g + 1, cz, blocks.bookshelf);
   w.putFast(cx + 2, g + 1, cz, blocks.bookshelf);
+  w.putFast(cx - 1, g + 1, cz, blocks.chest);
+  w.putFast(cx + 1, g + 1, cz, blocks.chest);
   w.putFast(cx, g + 6, cz, blocks.lamp);
   // 柱状图（投票结果：5/3/4/2/6）
   const bars: [number, number, number][] = [
@@ -848,6 +850,8 @@ export const SCENES: SceneDef[] = [
       const gp = groundAt(w, 64, 70);
       platform(w, 64, 70, 2, gp - 1, blocks.woolBlue);
       w.putFast(64, gp, 70, blocks.board);
+      // 河边渔民的木屋：屋里照例有箱子、工作台、书架和床
+      house(w, 36, 62, 7, 7, 4, blocks.plank, blocks.woolBlue);
       for (const p of [{ x: 40, z: 100 }, { x: 88, z: 100 }]) {
         const g = groundAt(w, p.x, p.z);
         platform(w, p.x, p.z, 2, g - 1, blocks.portal);
@@ -944,6 +948,17 @@ export const SCENES: SceneDef[] = [
         w.putFast(fx, 12, 92, blocks.coalOre);
       }
       w.putFast(94, 13, 92, blocks.lamp);
+      // 展厅里的储物与工作区（有顶场景不能用通用测地找地面，全部写死 y=7）
+      w.putFast(85, 7, 85, blocks.chest);
+      w.putFast(86, 7, 85, blocks.chest);
+      w.putFast(103, 7, 85, blocks.bookshelf);
+      w.putFast(103, 8, 85, blocks.bookshelf);
+      w.putFast(103, 7, 86, blocks.craftingTable);
+      w.putFast(102, 7, 86, blocks.furnace);
+      w.putFast(85, 7, 103, blocks.woolWhite);
+      w.putFast(85, 8, 103, blocks.woolWhite);
+      w.putFast(86, 7, 103, blocks.woolWhite);
+      w.putFast(85, 8, 102, blocks.torch);
       // 出口传送座
       for (const p of [{ x: 64, z: 86 }, { x: 40, z: 64 }]) {
         for (let y = 6; y < 9; y++) w.putFast(p.x, y, p.z, 0);
@@ -1068,6 +1083,8 @@ export const SCENES: SceneDef[] = [
       for (let i = 0; i < 10; i++) {
         box(w, 62, 10 + i, 104 - i, 66, 10 + i, 104 - i, blocks.quartz);
       }
+      // 观星者的圆顶小屋：里面照例摆好了箱子、书架、工作台和床
+      house(w, 44, 92, 7, 7, 4, blocks.quartz, blocks.woolPurple);
     },
   },
 

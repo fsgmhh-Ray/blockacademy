@@ -41,6 +41,8 @@ shaped('quartz', 1, 'inventory', ['CC', 'CC'], { C: 'crystal_shard' });
 shaped('hay', 1, 'table', ['WWW', 'WWW', 'WWW'], { W: 'wheat' });
 shaped('bookshelf', 1, 'table', ['PPP', 'BBB', 'PPP'], { P: 'plank', B: 'board' });
 shaped('furnace', 1, 'table', ['CCC', 'C.C', 'CCC'], { C: 'cobble' });
+// 玩具发射器：安全向的道具，只能打夜里的暗影怪
+shaped('toy_blaster', 1, 'table', ['MPM', ' S ', ' S '], { M: 'metal', P: 'plank', S: 'stick' });
 shaped('bread', 1, 'table', ['FFF'], { F: 'flour' });
 shapeless('cake', 1, 'table', ['milk', 'milk', 'milk', 'wheat', 'wheat', 'egg']);
 shaped('metal', 1, 'table', ['III', 'III', 'III'], { I: 'iron_ingot' });

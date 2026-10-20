@@ -1,4 +1,5 @@
 import { getActiveState, saveActive } from '../user/profile';
+import { filterByGrade } from './grades';
 
 /** 场景任务：以「主动探索」为目标，而不是线性脚本 */
 export interface Quest {
@@ -11,9 +12,11 @@ export interface Quest {
   /** npc 性格 id / demo id */
   target?: string;
   need: number;
+  /** 最低年级（不写 = 所有人都能做） */
+  grade?: number;
 }
 
-const talk = (scene: string, target: string, title: string, desc: string): Quest => ({
+const talk = (scene: string, target: string, title: string, desc: string, grade?: number): Quest => ({
   id: `talk_${scene}_${target}`,
   scene,
   icon: '💬',
@@ -22,9 +25,10 @@ const talk = (scene: string, target: string, title: string, desc: string): Quest
   title,
   desc,
   need: 1,
+  grade,
 });
 
-const demo = (scene: string, target: string, title: string, desc: string): Quest => ({
+const demo = (scene: string, target: string, title: string, desc: string, grade?: number): Quest => ({
   id: `demo_${scene}_${target}`,
   scene,
   icon: '🎬',
@@ -33,6 +37,7 @@ const demo = (scene: string, target: string, title: string, desc: string): Quest
   title,
   desc,
   need: 1,
+  grade,
 });
 
 export const QUESTS: Quest[] = [
@@ -91,11 +96,11 @@ export const QUESTS: Quest[] = [
   },
   demo('lab', 'chem_volcano', 'Volcano in a flask', 'Watch the baking-soda-and-vinegar volcano and name the gas that rushes out.'),
   // Math Academy (Grade 4+)
-  talk('math', 'fiona', 'Slice with Fiona', 'Ask Fraction Fiona to cut you a slice — and ask what 2/4 really equals.'),
-  talk('math', 'gideon', 'Patrol with Gideon', 'Chat with Geo Gideon and estimate an angle before he measures it.'),
-  talk('math', 'sylvia', 'Count with Sylvia', 'Ask Stat Sylvia what "average" really means, and how she would graph your answers.'),
-  demo('math', 'fraction_pizza', 'Cut the pizza yourself', 'Watch "The Pizza That Cuts Itself" and see why 1/2 = 2/4 = 4/8.'),
-  demo('math', 'angle_spinner', 'Turn a ray', 'Watch "The Turning Ray" and match 30°, 60°, 90° and 180° to real turns.'),
+  talk('math', 'fiona', 'Slice with Fiona', 'Ask Fraction Fiona to cut you a slice — and ask what 2/4 really equals.', 4),
+  talk('math', 'gideon', 'Patrol with Gideon', 'Chat with Geo Gideon and estimate an angle before he measures it.', 4),
+  talk('math', 'sylvia', 'Count with Sylvia', 'Ask Stat Sylvia what "average" really means, and how she would graph your answers.', 4),
+  demo('math', 'fraction_pizza', 'Cut the pizza yourself', 'Watch "The Pizza That Cuts Itself" and see why 1/2 = 2/4 = 4/8.', 4),
+  demo('math', 'angle_spinner', 'Turn a ray', 'Watch "The Turning Ray" and match 30°, 60°, 90° and 180° to real turns.', 4),
   {
     id: 'explore_math',
     scene: 'math',
@@ -104,6 +109,7 @@ export const QUESTS: Quest[] = [
     title: 'Walk the whole academy',
     desc: 'Walk more than 30 blocks from the entrance and visit the Pizza Parlor, the Garden, the Bridge and the Stat Tower.',
     need: 30,
+    grade: 4,
   },
   {
     id: 'build_math',
@@ -113,6 +119,7 @@ export const QUESTS: Quest[] = [
     title: 'Build something mathematical',
     desc: 'Place 12 blocks in the academy — try a symmetric shape or a bar graph of your own!',
     need: 12,
+    grade: 4,
   },
 ];
 
@@ -126,8 +133,13 @@ export const REWARDS: Record<string, { icon: string; name: string }> = {
   math: { icon: '🔢', name: 'Number Master Badge' },
 };
 
-export function questsOf(scene: string): Quest[] {
-  return QUESTS.filter((q) => q.scene === scene);
+/**
+ * 场景任务。传入 grade 时会过滤掉等级不够的任务（默认全部可做）。
+ */
+export function questsOf(scene: string, grade?: number): Quest[] {
+  const list = QUESTS.filter((q) => q.scene === scene);
+  if (grade === undefined) return list;
+  return filterByGrade(list, grade);
 }
 
 /** 进度读写 —— 进度归属到当前玩家（见 src/user/profile.ts） */

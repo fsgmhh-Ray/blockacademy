@@ -480,9 +480,10 @@ export class MobManager {
   }
 
   /** 剑挥出去：打中范围内所有敌对生物 */
-  strike(pos: THREE.Vector3, dir: THREE.Vector3, damage: number, reach = 3.0): number {
+  strike(pos: THREE.Vector3, dir: THREE.Vector3, damage: number, reach = 3.0, only?: (m: Mob) => boolean): number {
     let hits = 0;
     for (const m of this.mobs) {
+      if (only && !only(m)) continue;
       const to = new THREE.Vector3().subVectors(m.position, pos).setY(0);
       const d = to.length();
       if (d > reach) continue;
@@ -493,5 +494,16 @@ export class MobManager {
       hits++;
     }
     return hits;
+  }
+
+  /**
+   * 打倒一只普通动物后掉什么（小孩向的说法：不是「杀」，是「打败」）。
+   * 牛→牛奶、猪→皮革、羊→羊毛、鸡→蛋；狗猫不会掉东西（它们是人类的朋友）。
+   */
+  static dropOf(kind: MobKind): string | null {
+    const d = MOB_DEFS[kind];
+    if (d.hostile) return null;
+    if (kind === 'dog' || kind === 'cat') return null;
+    return d.gift;
   }
 }

@@ -64,6 +64,7 @@ export const blocks = {
   concrete: blockId('concrete'),
   magnet: blockId('magnet'),
   gas: blockId('gas'),
+  chest: blockId('chest'),
 };
 
 export const HOTBAR: { id: number; name: string }[] = [

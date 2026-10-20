@@ -3,12 +3,16 @@
  * 用法：npm run smoke
  */
 import { buildChunkMesh } from '../src/core/mesher';
-import { blockDef, BLOCK_LIST, isSolid } from '../src/core/blockRegistry';
-import { hasTile, GRID, ATLAS_TILES } from '../src/core/textures';
+import { blockDef, BLOCK_LIST, isSolid, blockId as blockIdOf } from '../src/core/blockRegistry';
+import { hasTile, GRID, ATLAS_TILES, TILE_KEYS, tileIdOf } from '../src/core/textures';
 import { SCENES } from '../src/world/scenes';
 import { Inventory } from '../src/craft/inventory';
 import { allRecipes } from '../src/craft/crafting';
-import { allItems, blockItems } from '../src/craft/items';
+import { allItems, blockItems, hasItem } from '../src/craft/items';
+import { ITEM_UNLOCKS } from '../src/edu/unlocks';
+import { quizById } from '../src/edu/quizzes';
+import { PASSES } from '../src/edu/shop';
+import { questsOf } from '../src/edu/quests';
 
 const RECIPE_COUNT = allRecipes().length;
 const ITEM_COUNT = allItems().length;
@@ -205,6 +209,47 @@ console.log('【传送台可达性】');
   check(unreachable === 0, `共 ${unreachable} 个传送台不可达`);
 }
 
+// 房屋家具自检：每座 house() 都应该摆上箱子/书架/工作台/熔炉，且箱子不悬空
+console.log('【房屋家具】');
+{
+  const chest = blockIdOf('chest');
+  const bookshelf = blockIdOf('bookshelf');
+  const table = blockIdOf('crafting_table');
+  const furnace = blockIdOf('furnace');
+  let noChest = 0;
+  let floating = 0;
+  let totalChest = 0;
+  for (const scene of SCENES) {
+    const w = new FakeWorld();
+    scene.build(w);
+    let chests = 0;
+    let shelves = 0;
+    let tables = 0;
+    let furnaces = 0;
+    for (let x = 0; x < w.sx; x++)
+      for (let y = 1; y < w.sy; y++)
+        for (let z = 0; z < w.sz; z++) {
+          const id = w.get(x, y, z);
+          if (id === chest) {
+            chests++;
+            if (!isSolid(w.get(x, y - 1, z))) floating++;
+          } else if (id === bookshelf) shelves++;
+          else if (id === table) tables++;
+          else if (id === furnace) furnaces++;
+        }
+    totalChest += chests;
+    // 没有箱子的场景允许（纯自然/地下/数学学院），但只要有房子就必须有箱子
+    const hasHouse = shelves > 0 || tables > 0 || furnaces > 0;
+    if (hasHouse && chests === 0) noChest++;
+    console.log(
+      `  ${scene.id.padEnd(11)} 箱=${String(chests).padStart(2)} 书架=${String(shelves).padStart(2)} 工作台=${String(tables).padStart(2)} 熔炉=${String(furnaces).padStart(2)}`,
+    );
+  }
+  check(noChest === 0, `${noChest} 个场景有家具却没放箱子`);
+  check(floating === 0, `${floating} 个箱子悬空`);
+  check(totalChest >= 8, `全场只有 ${totalChest} 个箱子，至少应有 8 个（每座房子 1-3 个）`);
+}
+
 // 合成与背包自检
 console.log('【合成】');
 {
@@ -262,6 +307,32 @@ console.log('【合成】');
   check(inv4.countOf('wood_pickaxe') === 1 && inv4.countOf('bread') === 5, '存档往返：物品保留');
   check(!!inv4.offhand && inv4.offhand.key === 'torch', '存档往返：副手槽保留');
   console.log(`  配方 ${RECIPE_COUNT} 条 / 物品 ${ITEM_COUNT} 种\n`);
+
+  // 答题解锁的物品必须真的存在，而且配套的题目也要存在
+  for (const u of ITEM_UNLOCKS) {
+    check(hasItem(u.item), `解锁表里的物品 ${u.item} 不存在`);
+    check(!!quizById(u.quiz), `解锁表 ${u.item} 指向的题目 ${u.quiz} 不存在`);
+  }
+  // 商店通行证引用的题目也要存在
+  for (const p of PASSES) {
+    if (p.quiz) check(!!quizById(p.quiz), `通行证 ${p.id} 指向的题目 ${p.quiz} 不存在`);
+  }
+  console.log(`  答题解锁 ${ITEM_UNLOCKS.length} 项 / 通行证 ${PASSES.length} 种，引用全部有效\n`);
+}
+
+// 年级过滤自检：低年级玩家不能被过滤到「一个任务都没有」
+console.log('【年级过滤】');
+{
+  let empty = 0;
+  const rows: string[] = [];
+  for (let g = 1; g <= 6; g++) {
+    const counts = SCENES.map((s) => questsOf(s.id, g).length);
+    const total = counts.reduce((a, b) => a + b, 0);
+    rows.push(`  Grade ${g}: 共 ${total} 个任务（${SCENES.map((s, i) => (counts[i] ? s.id : '')).filter(Boolean).join(' ') || '无'}）`);
+    if (total === 0) empty++;
+  }
+  rows.forEach((r) => console.log(r));
+  check(empty === 0, `${empty} 个年级被年级过滤清空了全部任务`);
 }
 
 // 方块表自检
@@ -284,7 +355,20 @@ for (const b of BLOCK_LIST) {
   }
 }
 console.log(`  已注册 ${ids.size} 种方块，id = 0..${total - 1} 全部对齐`);
-console.log(`  贴图槽位 ${ATLAS_TILES} / ${GRID * GRID} 已使用\n`);
+// 图集槽位必须连续、不越界：背包/手持图标靠「槽位 % 网格宽度」取贴图，
+// 一旦槽位算错（历史上出现过 UI 里写死网格宽度 8、而图集已是 12 的 bug），
+// 手持方块和背包图标就会对不上。
+{
+  const seen = new Set<number>();
+  for (const k of TILE_KEYS) {
+    const id = tileIdOf(k);
+    check(id >= 0 && id < GRID * GRID, `贴图 ${k} 的槽位 ${id} 越界（图集只有 ${GRID}×${GRID}=${GRID * GRID} 格）`);
+    check(!seen.has(id), `贴图 ${k} 的槽位 ${id} 与别的贴图重复`);
+    seen.add(id);
+  }
+  check(seen.size === ATLAS_TILES, `贴图槽位不连续：${seen.size} != ${ATLAS_TILES}`);
+}
+console.log(`  贴图槽位 ${ATLAS_TILES} / ${GRID * GRID} 已使用，槽位连续无冲突\n`);
 
 if (failed === 0) {
   console.log('✅ 全部检查通过');

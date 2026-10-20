@@ -17,6 +17,8 @@
 import type { LLMConfig } from '../npc/brain';
 import type { Progress } from '../edu/quests';
 import { DEFAULT_BROKER, DEFAULT_ROOM, type NetConfig } from '../net/protocol';
+import { DEFAULT_OUTFIT, normalizeOutfit, type Outfit } from './wardrobe';
+import { DEFAULT_GRADE, clampGrade } from '../edu/grades';
 
 export interface ProfileMeta {
   id: string;
@@ -24,6 +26,27 @@ export interface ProfileMeta {
   avatar: string;
   color: string;
   createdAt: number;
+}
+
+/** 家长设置：全部存在本地 profile 里，由家长 PIN 保护 */
+export interface ParentSettings {
+  /** 家长门禁是否开启（进入家长面板前要答对一道题） */
+  gateOn: boolean;
+  /** 家长 PIN 的哈希（明文不保存） */
+  pin: string;
+  /** 每日自由聊天上限（分钟），0 = 不限 */
+  chatMinutes: number;
+  /** 允许自由聊天（打给别的玩家） */
+  freeChat: boolean;
+  /** 允许多人联机 */
+  multiplayer: boolean;
+  /** 允许使用外部 AI */
+  ai: boolean;
+  /** 敏感词过滤（整条消息变成 ###） */
+  wordFilter: boolean;
+  /** 允许的年级范围 */
+  gradeMin: number;
+  gradeMax: number;
 }
 
 export interface ChatEntry {
@@ -52,6 +75,28 @@ export interface UserState {
   volume: number;
   /** 多人联机配置（broker / 房间 / 开关） */
   net: NetConfig;
+  /** 学校年级 1..6，决定任务与知识难度 */
+  grade: number;
+  /** 金币 */
+  coins: number;
+  /** 已购买的通行证 id */
+  passes: string[];
+  /** 答题解锁的物品 id */
+  unlocked: string[];
+  /** 角色外观 */
+  outfit: Outfit;
+  /** 家长设置 */
+  parent: ParentSettings;
+  /** 账号密码哈希（别人不能用这个账号） */
+  password: string;
+  /** 世界扩张次数：每完成一个任务 +1 */
+  expansion: number;
+  /** 今天已经用掉的聊天分钟数 */
+  chatUsed: number;
+  /** 聊天计费日（YYYY-MM-DD），跨天自动清零 */
+  chatDay: string;
+  /** 箱子内容物 JSON（见 world/chests.ts） */
+  chests: string;
 }
 
 const INDEX_KEY = 'blockacademy.users';
@@ -66,6 +111,25 @@ const emptyProgress = (): Progress => ({ talk: {}, demo: {}, build: {}, explore:
 const defaultLLM = (): LLMConfig => ({ enabled: false, baseUrl: '', apiKey: '', model: '' });
 /** 联机默认开：零配置进公共 broker 的 main 房间；设置里可关/可换 */
 const defaultNet = (): NetConfig => ({ enabled: true, broker: DEFAULT_BROKER, room: DEFAULT_ROOM });
+
+const defaultParent = (): ParentSettings => ({
+  gateOn: true,
+  pin: '',
+  chatMinutes: 0,
+  freeChat: true,
+  multiplayer: true,
+  ai: true,
+  wordFilter: true,
+  gradeMin: 1,
+  gradeMax: 6,
+});
+
+/** 今天的日期（本地时区），用于聊天时长按天重置 */
+function today(): string {
+  const d = new Date();
+  const p = (n: number) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
+}
 
 function uid(): string {
   return 'u' + Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
@@ -101,6 +165,17 @@ function defaultState(): UserState {
     sound: true,
     volume: 0.55,
     net: defaultNet(),
+    grade: DEFAULT_GRADE,
+    coins: 0,
+    passes: [],
+    unlocked: [],
+    outfit: { ...DEFAULT_OUTFIT },
+    parent: defaultParent(),
+    password: '',
+    expansion: 0,
+    chatUsed: 0,
+    chatDay: today(),
+    chests: '',
   };
 }
 
@@ -126,6 +201,19 @@ function loadState(id: string): UserState {
           broker: typeof s.net?.broker === 'string' && s.net.broker ? s.net.broker : DEFAULT_BROKER,
           room: typeof s.net?.room === 'string' && s.net.room ? s.net.room : DEFAULT_ROOM,
         },
+        grade: clampGrade(typeof s.grade === 'number' ? s.grade : DEFAULT_GRADE),
+        coins: typeof s.coins === 'number' && s.coins >= 0 ? Math.floor(s.coins) : 0,
+        passes: Array.isArray(s.passes) ? (s.passes as unknown[]).filter((x): x is string => typeof x === 'string') : [],
+        unlocked: Array.isArray(s.unlocked)
+          ? (s.unlocked as unknown[]).filter((x): x is string => typeof x === 'string')
+          : [],
+        outfit: normalizeOutfit(s.outfit),
+        parent: { ...defaultParent(), ...(s.parent && typeof s.parent === 'object' ? s.parent : {}) },
+        password: typeof s.password === 'string' ? s.password : '',
+        expansion: typeof s.expansion === 'number' && s.expansion > 0 ? Math.floor(s.expansion) : 0,
+        chatUsed: typeof s.chatUsed === 'number' && s.chatUsed > 0 ? s.chatUsed : 0,
+        chatDay: typeof s.chatDay === 'string' ? s.chatDay : today(),
+        chests: typeof s.chests === 'string' ? s.chests : '',
       };
     }
   } catch {
@@ -150,6 +238,17 @@ function saveState(id: string, s: UserState): void {
       sound: s.sound,
       volume: s.volume,
       net: s.net ?? defaultNet(),
+      grade: s.grade,
+      coins: s.coins,
+      passes: s.passes,
+      unlocked: s.unlocked,
+      outfit: s.outfit,
+      parent: s.parent,
+      password: s.password,
+      expansion: s.expansion,
+      chatUsed: s.chatUsed,
+      chatDay: s.chatDay,
+      chests: s.chests,
     }),
   );
 }
@@ -255,4 +354,91 @@ export function saveActive(partial: Partial<UserState>): void {
   if (!id) return;
   const next = { ...loadState(id), ...partial };
   saveState(id, next);
+}
+
+// ───────── 存档小工具（都作用于当前玩家） ─────────
+
+export function addCoins(n: number): number {
+  const st = getActiveState().state;
+  const coins = Math.max(0, st.coins + n);
+  saveActive({ coins });
+  return coins;
+}
+
+export function hasPass(id: string): boolean {
+  return getActiveState().state.passes.includes(id);
+}
+
+export function grantPass(id: string): void {
+  const st = getActiveState().state;
+  if (st.passes.includes(id)) return;
+  saveActive({ passes: [...st.passes, id] });
+}
+
+export function isUnlocked(itemKey: string): boolean {
+  return getActiveState().state.unlocked.includes(itemKey);
+}
+
+export function unlockItem(itemKey: string): void {
+  const st = getActiveState().state;
+  if (st.unlocked.includes(itemKey)) return;
+  saveActive({ unlocked: [...st.unlocked, itemKey] });
+}
+
+export function setGrade(g: number): void {
+  saveActive({ grade: clampGrade(g) });
+}
+
+export function setOutfit(o: Outfit): void {
+  saveActive({ outfit: normalizeOutfit(o) });
+}
+
+export function setParentSettings(p: Partial<ParentSettings>): void {
+  const st = getActiveState().state;
+  saveActive({ parent: { ...st.parent, ...p } });
+}
+
+export function setPassword(hash: string): void {
+  saveActive({ password: hash });
+}
+
+export function hasPassword(): boolean {
+  return !!getActiveState().state.password;
+}
+
+export function bumpExpansion(): number {
+  const st = getActiveState().state;
+  const expansion = st.expansion + 1;
+  saveActive({ expansion });
+  return expansion;
+}
+
+export function setChests(json: string): void {
+  saveActive({ chests: json });
+}
+
+/** 某个档案是否设了密码（切换档案时要用；不区分是不是当前玩家） */
+export function profileIsLocked(id: string): boolean {
+  try {
+    const raw = localStorage.getItem(STATE_PREFIX + id);
+    if (!raw) return false;
+    const s = JSON.parse(raw) as { password?: unknown };
+    return typeof s.password === 'string' && s.password.length > 0;
+  } catch {
+    return false;
+  }
+}
+
+/** 校验某个档案的密码 */
+export function checkProfilePassword(id: string, hash: string): boolean {
+  try {
+    const raw = localStorage.getItem(STATE_PREFIX + id);
+    if (!raw) return false;
+    const s = JSON.parse(raw) as { password?: unknown };
+    const stored = typeof s.password === 'string' ? s.password : '';
+    if (!stored) return true; // 没设密码 = 不拦
+    return stored === hash;
+  } catch {
+    return false;
+  }
 }
