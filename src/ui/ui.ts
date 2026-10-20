@@ -176,7 +176,8 @@ export class UI {
   ) {
     root.innerHTML = TEMPLATE;
     const q = (id: string): HTMLElement => {
-      const node = root.querySelector('#' + id) as HTMLElement;
+      const node = root.querySelector('#' + id) as HTMLElement | null;
+      if (!node) throw new Error(`UI element #${id} is missing from the template`);
       this.el[id] = node;
       return node;
     };
@@ -190,14 +191,10 @@ export class UI {
     this.chipsHost = q('quick');
     this.askInput = q('ask-input') as HTMLInputElement;
     q('quests');
-    q('overlay-map');
-    q('overlay-settings');
-    q('overlay-profiles');
-    q('overlay-help');
-    q('overlay-inventory');
-    q('overlay-pause');
-    q('overlay-chatlog');
-    q('overlay-players');
+    // ⚠️ ALL_OVERLAYS 里的每一个都必须在下面注册。
+    // anyOverlayOpen() / closeAllOverlays() 每帧遍历这个数组，
+    // 漏掉任何一个都会对 undefined 调 classList → 整个游戏在标题页就崩。
+    for (const which of ALL_OVERLAYS) q(`overlay-${which}`);
     q('showcase');
     q('sc-top');
     q('sc-bar');

@@ -3,6 +3,7 @@
  * 用法：npm run smoke
  */
 import { buildChunkMesh } from '../src/core/mesher';
+import { readFileSync } from 'node:fs';
 import { blockDef, BLOCK_LIST, isSolid, blockId as blockIdOf } from '../src/core/blockRegistry';
 import { hasTile, GRID, ATLAS_TILES, TILE_KEYS, tileIdOf } from '../src/core/textures';
 import { SCENES } from '../src/world/scenes';
@@ -369,6 +370,42 @@ console.log(`  已注册 ${ids.size} 种方块，id = 0..${total - 1} 全部对�
   check(seen.size === ATLAS_TILES, `贴图槽位不连续：${seen.size} != ${ATLAS_TILES}`);
 }
 console.log(`  贴图槽位 ${ATLAS_TILES} / ${GRID * GRID} 已使用，槽位连续无冲突\n`);
+
+// UI 模板自检：漏注册一个 overlay，anyOverlayOpen() 每帧就会对 undefined
+// 调 classList —— 整个游戏在标题页直接崩，且 typecheck / build 都发现不了。
+// （2026-10 真的发生过：6 个新面板全在 ALL_OVERLAYS 里但没进 q()。）
+console.log('【UI 模板】');
+{
+  const src = readFileSync('src/ui/ui.ts', 'utf8');
+  const tpl = src.slice(src.indexOf('const TEMPLATE ='));
+  const tplIds = new Set<string>();
+  for (const m of tpl.matchAll(/\bid="([^"]+)"/g)) tplIds.add(m[1]);
+
+  const registered = new Set<string>();
+  for (const m of src.matchAll(/\n\s*q\('([^']+)'\)/g)) registered.add(m[1]);
+  const fe = src.match(/'dialog-avatar'[\s\S]*?'pm-parent'\]\.forEach/);
+  if (fe) for (const m of fe[0].matchAll(/'([^']+)'/g)) registered.add(m[1]);
+
+  // ALL_OVERLAYS 的每一项都应该由那个 for 循环自动注册
+  check(
+    /for \(const which of ALL_OVERLAYS\) q\(`overlay-\$\{which\}`\)/.test(src),
+    'ALL_OVERLAYS 没有自动注册进 el——新增面板必须走 for (const which of ALL_OVERLAYS) q(...)',
+  );
+
+  const missing = [...registered].filter((id) => !tplIds.has(id));
+  check(missing.length === 0, `${missing.length} 个注册的元素在 TEMPLATE 里不存在：${missing.slice(0, 6).map((i) => '#' + i).join(' ')}`);
+
+  const ob = src.match(/export const ALL_OVERLAYS: Overlay\[\] = \[([\s\S]*?)\];/);
+  const overlays = ob ? [...ob[1].matchAll(/'([a-z]+)'/g)].map((m) => m[1]) : [];
+  const noDom = overlays.filter((o) => !tplIds.has(`overlay-${o}`));
+  check(noDom.length === 0, `ALL_OVERLAYS 里这些项没有对应 DOM：${noDom.map((o) => '#overlay-' + o).join(' ')}`);
+
+  const tplOv = [...tplIds].filter((id) => id.startsWith('overlay-')).map((id) => id.slice(8));
+  const notListed = tplOv.filter((o) => !overlays.includes(o));
+  check(notListed.length === 0, `模板里的 overlay 没进 ALL_OVERLAYS（关不掉也检测不到）：${notListed.map((o) => '#overlay-' + o).join(' ')}`);
+
+  console.log(`  注册 ${registered.size} 个 id 全部存在；${overlays.length} 个 overlay 双向对齐\n`);
+}
 
 if (failed === 0) {
   console.log('✅ 全部检查通过');
